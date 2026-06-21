@@ -1,4 +1,5 @@
 #include "model.h"
+#include "../shader/shader.h"
 #include <iostream>
 
 namespace Engine {
@@ -72,24 +73,16 @@ void Model::processMesh(aiMesh *mesh, const aiScene *scene) {
 
   if (mesh->mMaterialIndex >= 0) {
     aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
-    std::vector<std::unique_ptr<Texture>> diffuseTextures;
-    loadMaterialTextures(material, aiTextureType_DIFFUSE, diffuseTextures);
-    if (!diffuseTextures.empty())
-      sub.diffuseTexture = std::move(diffuseTextures[0]);
+    if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+      aiString str;
+      material->GetTexture(aiTextureType_DIFFUSE, 0, &str);
+      auto tex = std::make_unique<Texture>(std::string(str.C_Str()));
+      if (tex->id() != 0)
+        sub.diffuseTexture = std::move(tex);
+    }
   }
 
   m_submeshes.push_back(std::move(sub));
-}
-
-void Model::loadMaterialTextures(aiMaterial *mat, aiTextureType type,
-                                 std::vector<std::unique_ptr<Texture>> &textures) {
-  for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
-    aiString str;
-    mat->GetTexture(type, i, &str);
-    auto tex = std::make_unique<Texture>(std::string(str.C_Str()));
-    if (tex->id() != 0)
-      textures.push_back(std::move(tex));
-  }
 }
 
 void Model::draw(ShaderProgram &shader) const {
@@ -101,6 +94,7 @@ void Model::draw(ShaderProgram &shader) const {
     } else {
       shader.setInt("useTexture", 0);
     }
+    shader.setInt("useInstancing", 0);
     sub.mesh->draw();
   }
 }

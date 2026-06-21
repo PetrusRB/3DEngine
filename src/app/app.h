@@ -1,11 +1,11 @@
 #pragma once
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
 #include <vector>
+
+struct GLFWwindow;
 
 namespace Engine {
 
@@ -19,6 +19,8 @@ class SceneManager;
 class Mesh;
 class UI;
 class Texture;
+class Light;
+class DirectionalLight;
 
 struct WindowConfig {
   int width = 800;
@@ -55,18 +57,21 @@ private:
   std::unique_ptr<Mesh> m_cubeMesh;
   std::unique_ptr<UI> m_ui;
 
-  glm::vec3 m_lightPos = glm::vec3(1.0f, 1.0f, 1.0f);
-  glm::vec3 m_lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+  std::vector<std::unique_ptr<Light>> m_lights;
   std::string maze_prefix = "maze";
 
-  float m_ambientStrength = 0.1f;
+  float m_shininess = 32.0f;
   bool m_cursorEnabled = false;
   int m_mazeWidth = 15;
   int m_mazeHeight = 15;
-  float m_wallHeight = 1.0f;
+  float m_wallHeight = 4.0f;
   float m_floorThickness = 0.1f;
   float m_cellSize = 2.0f;
   ObjectID m_rotatingCube = 0;
+  bool m_frustumEnabled = true;
+  float m_frustumMargin = 0.1f;
+  int m_visibleObjects = 0;
+  int m_culledObjects = 0;
 
   void buildMaze();
 };

@@ -37,8 +37,11 @@ void Camera::processMouse(float xoffset, float yoffset) {
     updateVectors();
 }
 
+void Camera::setPosition(const glm::vec3 &position) { m_position = position; }
+
 glm::vec3 Camera::getPosition() const { return m_position; }
 glm::vec3 Camera::getFront() const { return m_front; }
+glm::vec3 Camera::getRight() const { return m_right; }
 float Camera::getFov() const { return m_fov; }
 
 void Camera::updateVectors() {

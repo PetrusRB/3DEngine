@@ -22,12 +22,15 @@ public:
     Mesh& operator=(const Mesh&) = delete;
 
     void draw() const;
+    void uploadInstances(const std::vector<glm::mat4>& matrices);
+    void drawInstanced(int count) const;
     GLuint vao() const;
 
 private:
     GLuint m_vao = 0;
     GLuint m_vbo = 0;
     GLuint m_ebo = 0;
+    GLuint m_instanceVBO = 0;
     GLsizei m_vertexCount = 0;
     GLsizei m_indexCount = 0;
     bool m_indexed = false;

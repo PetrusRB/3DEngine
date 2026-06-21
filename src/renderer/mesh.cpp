@@ -62,6 +62,8 @@ Mesh::Mesh(const std::vector<Vertex> &vertices,
 }
 
 Mesh::~Mesh() {
+  if (m_instanceVBO)
+    glDeleteBuffers(1, &m_instanceVBO);
   if (m_ebo)
     glDeleteBuffers(1, &m_ebo);
   if (m_vbo)
@@ -76,6 +78,38 @@ void Mesh::draw() const {
     glDrawElements(GL_TRIANGLES, m_indexCount, GL_UNSIGNED_INT, 0);
   else
     glDrawArrays(GL_TRIANGLES, 0, m_vertexCount);
+  glBindVertexArray(0);
+}
+
+void Mesh::uploadInstances(const std::vector<glm::mat4> &matrices) {
+  if (matrices.empty())
+    return;
+
+  if (!m_instanceVBO)
+    glGenBuffers(1, &m_instanceVBO);
+
+  glBindVertexArray(m_vao);
+  glBindBuffer(GL_ARRAY_BUFFER, m_instanceVBO);
+  glBufferData(GL_ARRAY_BUFFER, matrices.size() * sizeof(glm::mat4),
+               matrices.data(), GL_DYNAMIC_DRAW);
+
+  for (int i = 0; i < 4; i++) {
+    glEnableVertexAttribArray(4 + i);
+    glVertexAttribPointer(4 + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
+                          (void *)(i * sizeof(glm::vec4)));
+    glVertexAttribDivisor(4 + i, 1);
+  }
+
+  glBindVertexArray(0);
+}
+
+void Mesh::drawInstanced(int count) const {
+  glBindVertexArray(m_vao);
+  if (m_indexed)
+    glDrawElementsInstanced(GL_TRIANGLES, m_indexCount, GL_UNSIGNED_INT, 0,
+                            count);
+  else
+    glDrawArraysInstanced(GL_TRIANGLES, 0, m_vertexCount, count);
   glBindVertexArray(0);
 }
 

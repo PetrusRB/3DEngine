@@ -2,6 +2,7 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <string>
+#include <unordered_map>
 
 namespace Engine {
 
@@ -23,6 +24,9 @@ public:
 
 private:
     GLuint m_id = 0;
+    mutable std::unordered_map<std::string, GLint> m_uniformCache;
+
+    GLint getUniformLocation(const std::string& name) const;
 
     static std::string readFile(const std::string& path);
     static GLuint compileShader(const std::string& source, GLenum type);

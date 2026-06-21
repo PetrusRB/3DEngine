@@ -1,7 +1,4 @@
 #pragma once
-#include "../shader/shader.h"
-#include "../texture/texture.h"
-#include "mesh.h"
 #include "model.h"
 #include "transform.h"
 #include <cstdint>
@@ -12,6 +9,12 @@
 #include <vector>
 
 namespace Engine {
+
+class ShaderProgram;
+class Mesh;
+class Texture;
+class SpatialGrid;
+class Frustum;
 
 using ObjectID = uint32_t;
 using Tag = std::string;
@@ -48,7 +51,7 @@ public:
                      const glm::vec3 &rotation = glm::vec3(0.0f));
 
   ObjectID addModel(const std::string &filename, const std::string &name = "",
-                    const Tag &tag = "",
+                    Texture *texture = nullptr, const Tag &tag = "",
                     const glm::vec3 &position = glm::vec3(0.0f),
                     const glm::vec3 &scale = glm::vec3(1.0f),
                     const glm::vec3 &rotation = glm::vec3(0.0f));
@@ -58,7 +61,8 @@ public:
   void clear();
   void clearByTag(const Tag &tag);
 
-  void render(ShaderProgram &shader);
+  void render(ShaderProgram &shader, const Frustum *frustum = nullptr);
+  void buildSpatialGrid(SpatialGrid &grid) const;
 
   std::unordered_map<ObjectID, SceneObject> &objects();
   std::vector<ObjectID> getIDsByTag(const Tag &tag);
