@@ -1,6 +1,7 @@
 # **Necros**
 
-_Um remake de um **motor gráfico** que eu criei lá pelos 15 anos (Template Engine)._
+_Um remake de uma **game engine** que eu criei lá pelos 15 anos (Template Engine);
+Focada especificamente para renderização 3D_.
 
 > [!WARNING]  
 > **Ainda está em fase de desenvolvimento.**  
