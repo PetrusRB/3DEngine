@@ -4,7 +4,7 @@ um remake de um _motor gráfico_ do qual eu tinha feito quando tinha la pros 15 
 
 ---
 
-# Features:
+## Features:
 
 - Movimento básico primeira pessoa
 - Interface simples Imgui
@@ -13,7 +13,7 @@ um remake de um _motor gráfico_ do qual eu tinha feito quando tinha la pros 15 
 - Algoritmo basico de labirinto (Recursive Backtracker).
 - Editor simples: alterar propriedades de objetos como uv, posição, rotação e etc; adição/edição de luzes (directional light, point light e spot lights); gerador de labirinto (modificação na largura, altura, espaçamento, altura das paredes, e comprimento do chão (ajustado com base ao comprimento da grid))
 
-# Controles:
+## Controles:
 
 - **W** = Frente
 - **A** = Esquerda
@@ -24,3 +24,8 @@ um remake de um _motor gráfico_ do qual eu tinha feito quando tinha la pros 15 
 - **V** = Voar (com noclip)
 - **Shift esquerdo** = ir para baixo quando estiver voando
 - **Espaço** = Se estiver voando vai para cima, se não estiver vai pular normalmente (igual a um fps normal).
+
+## Compilar:
+
+- Criei uma script para fazer o processo mais facil: .\b.bat.
+- Se quiser rodar diretamente use --direct (.\b.bat --direct)
