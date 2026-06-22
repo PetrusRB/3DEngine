@@ -20,6 +20,7 @@ um remake de um _motor gráfico_ do qual eu tinha feito quando tinha la pros 15 
 - **S** = Trás
 - **D** = Direita
 
+- **Q** = Abre o editor.
 - **Escape** = Pausar o jogo
 - **V** = Voar (com noclip)
 - **Shift esquerdo** = ir para baixo quando estiver voando
