@@ -43,6 +43,10 @@ struct SpotLight {
 uniform int numDirLights;
 uniform int numPointLights;
 uniform int numSpotLights;
+
+uniform vec3 fogColor;
+uniform float fogStart;
+uniform float fogEnd;
 uniform DirLight dirLights[MAX_DIR_LIGHTS];
 uniform PointLight pointLights[MAX_POINT_LIGHTS];
 uniform SpotLight spotLights[MAX_SPOT_LIGHTS];
@@ -92,7 +96,7 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec
 void main() {
     vec3 texColor = useTexture ? vec3(texture(texture1, TexCoords)) : vColor;
     vec3 norm = normalize(Normal);
-    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 viewDir = normalize(viewPos - FragPos);  
 
     vec3 result = vec3(0.0);
 
@@ -105,6 +109,9 @@ void main() {
     for (int i = 0; i < numSpotLights && i < MAX_SPOT_LIGHTS; i++)
         result += CalcSpotLight(spotLights[i], norm, FragPos, viewDir, texColor);
 
+    float dist = length(viewPos - FragPos);
+    float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
+    result = mix(fogColor, result, fogFactor);
     result = pow(result, vec3(1.0 / 2.2));
     FragColor = vec4(result, 1.0);
 }

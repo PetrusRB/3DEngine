@@ -23,15 +23,17 @@ public:
   void draw(ShaderProgram &shader) const;
   bool valid() const;
 
-private:
-  void loadModel(const std::string &path);
-  void processNode(aiNode *node, const aiScene *scene);
-  void processMesh(aiMesh *mesh, const aiScene *scene);
-
   struct SubMesh {
     std::unique_ptr<Mesh> mesh;
     std::unique_ptr<Texture> diffuseTexture;
   };
+
+  const std::vector<SubMesh> &subMeshes() const { return m_submeshes; }
+
+private:
+  void loadModel(const std::string &path);
+  void processNode(aiNode *node, const aiScene *scene);
+  void processMesh(aiMesh *mesh, const aiScene *scene);
 
   std::vector<SubMesh> m_submeshes;
   bool m_valid = false;

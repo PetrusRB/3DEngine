@@ -21,6 +21,7 @@ class UI;
 class Texture;
 class Light;
 class DirectionalLight;
+class MenuPause;
 
 struct WindowConfig {
   int width = 800;
@@ -56,6 +57,7 @@ private:
   std::unique_ptr<SceneManager> m_scene;
   std::unique_ptr<Mesh> m_cubeMesh;
   std::unique_ptr<UI> m_ui;
+  std::unique_ptr<MenuPause> m_menuPause;
 
   std::vector<std::unique_ptr<Light>> m_lights;
   std::string maze_prefix = "maze";
@@ -67,7 +69,7 @@ private:
   float m_wallHeight = 4.0f;
   float m_floorThickness = 0.1f;
   float m_cellSize = 2.0f;
-  ObjectID m_rotatingCube = 0;
+  ObjectID m_coin = 0;
   bool m_frustumEnabled = true;
   float m_frustumMargin = 0.1f;
   int m_visibleObjects = 0;

@@ -22,22 +22,22 @@ using Tag = std::string;
 struct SceneObject {
   ObjectID id = 0;
   Mesh *mesh = nullptr;
-  std::unique_ptr<Model> model;
+  Model *model = nullptr;
   Texture *texture = nullptr;
   Transform transform;
   bool active = true;
   std::string name;
   Tag tag;
+  glm::vec2 uvTiling{1.0f, 1.0f};
+  glm::vec2 uvOffset{0.0f, 0.0f};
 
   SceneObject() = default;
   SceneObject(ObjectID id, Mesh *mesh, Texture *texture = nullptr,
               const std::string &name = "", const Tag &tag = "")
       : id(id), mesh(mesh), texture(texture), name(name), tag(tag) {}
-  SceneObject(ObjectID id, std::unique_ptr<Model> model,
-              Texture *texture = nullptr, const std::string &name = "",
-              const Tag &tag = "")
-      : id(id), model(std::move(model)), texture(texture), name(name),
-        tag(tag) {}
+  SceneObject(ObjectID id, Model *model, Texture *texture = nullptr,
+              const std::string &name = "", const Tag &tag = "")
+      : id(id), model(model), texture(texture), name(name), tag(tag) {}
 };
 
 class SceneManager {
@@ -61,7 +61,8 @@ public:
   void clear();
   void clearByTag(const Tag &tag);
 
-  void render(ShaderProgram &shader, const Frustum *frustum = nullptr);
+  void render(ShaderProgram &shader, const Frustum *frustum = nullptr,
+              float renderDistance = 0.0f, const glm::vec3 &viewPos = glm::vec3(0.0f));
   void buildSpatialGrid(SpatialGrid &grid) const;
 
   std::unordered_map<ObjectID, SceneObject> &objects();
@@ -71,6 +72,7 @@ public:
 private:
   ObjectID nextID();
   std::unordered_map<ObjectID, SceneObject> m_objects;
+  std::unordered_map<std::string, std::shared_ptr<Model>> m_modelCache;
   ObjectID m_nextID = 1;
 };
 

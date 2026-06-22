@@ -12,6 +12,7 @@
 #include "../renderer/scene.h"
 #include "../shader/shader.h"
 #include "../texture/texture.h"
+#include "../ui/menu_pause.h"
 #include "../ui/ui.h"
 #include "../utils/input.h"
 #include <GLFW/glfw3.h>
@@ -19,6 +20,8 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_opengl3.h>
 #include <memory>
 #include <stdexcept>
 
@@ -59,6 +62,8 @@ void Application::init() {
 
   m_ui = std::make_unique<UI>();
   m_ui->init(m_window);
+
+  m_menuPause = std::make_unique<MenuPause>();
 
   m_input = std::make_unique<InputManager>(m_window);
   m_cubemap = std::make_unique<Cubemap>();
@@ -163,9 +168,8 @@ void Application::init() {
 
   Texture *wallTex = m_textures[0].get();
 
-  m_rotatingCube = m_scene->addObject(
-      m_cubeMesh.get(), nullptr, "Rotating Cube", "persistent",
-      glm::vec3(5.0f, 0.5f, 5.0f), glm::vec3(0.5f));
+  m_coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin", "persistent",
+                              glm::vec3(5.0f, 0.5f, 5.0f), glm::vec3(0.5f));
 
   m_scene->addModel("src/assets/models/teapot/teapot.obj", "Teapot", nullptr,
                     "persistent", glm::vec3(8.0f, 7.0f, 3.0f),
@@ -189,11 +193,14 @@ void Application::buildMaze() {
   Texture *wallTex = m_textures[0].get();
   Texture *floorTex = m_textures[1].get();
 
-  uint32_t gridHeight = grid.size();
-  uint32_t gridWidth = grid[0].size();
+  uint32_t gridHeight = grid.size();   // quantidade de linhas
+  uint32_t gridWidth = grid[0].size(); // quantidade de colunas
 
+  // calcular o tamanho fisico do labirinto
   float totalWidth = gridWidth * m_cellSize;
   float totalDepth = gridHeight * m_cellSize;
+
+  // encontra o centro do labirinto
   float centerX = (gridWidth - 1) * m_cellSize * 0.5f;
   float centerZ = (gridHeight - 1) * m_cellSize * 0.5f;
 
@@ -224,10 +231,23 @@ void Application::run() {
     float deltaTime = currentFrame - lastFrame;
     lastFrame = currentFrame;
 
-    if (m_input->isKeyHeld(GLFW_KEY_ESCAPE))
+    m_menuPause->update(*m_input);
+
+    if (m_menuPause->shouldQuit())
       glfwSetWindowShouldClose(m_window, true);
 
-    if (m_input->isKeyJustPressed(GLFW_KEY_Q)) {
+    bool menuJustOpened = m_menuPause->isPaused() && !m_menuPause->wasPaused();
+    bool menuJustClosed = !m_menuPause->isPaused() && m_menuPause->wasPaused();
+
+    if (menuJustOpened) {
+      m_input->enableCursor();
+      m_cursorEnabled = true;
+    } else if (menuJustClosed) {
+      m_cursorEnabled = false;
+      m_input->disableCursor();
+    }
+
+    if (m_input->isKeyJustPressed(GLFW_KEY_Q) && !m_menuPause->isPaused()) {
       m_cursorEnabled = !m_cursorEnabled;
       m_ui->set_main_visible(m_cursorEnabled);
       if (m_cursorEnabled)
@@ -238,13 +258,13 @@ void Application::run() {
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (!m_cursorEnabled)
+    if (!m_cursorEnabled && !m_menuPause->isPaused())
       m_player->update(deltaTime);
 
     m_ui->setUIPlayerState(m_player->isFlying(), m_player->isOnGround(),
                            m_player->transform.getPosition());
 
-    SceneObject *rotCube = m_scene->getObject(m_rotatingCube);
+    SceneObject *rotCube = m_scene->getObject(m_coin);
     if (rotCube && rotCube->active)
       rotCube->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
 
@@ -358,7 +378,13 @@ void Application::run() {
     m_shader->setMat4("view", m_camera->getViewMatrix());
     m_shader->setMat4("projection", m_camera->getProjectionMatrix(aspect));
 
-    m_scene->render(*m_shader, m_frustumEnabled ? &frustum : nullptr);
+    m_shader->setFloat("fogStart", m_menuPause->settings().fogStart);
+    m_shader->setFloat("fogEnd", m_menuPause->settings().fogEnd);
+    m_shader->setVec3("fogColor", m_menuPause->settings().fogColor);
+
+    m_scene->render(*m_shader, m_frustumEnabled ? &frustum : nullptr,
+                    m_menuPause->settings().fogEnd + 20.0f,
+                    m_camera->getPosition());
 
     // Rebuild spatial grid
     spatialGrid.clear();
@@ -366,6 +392,10 @@ void Application::run() {
     m_player->setSpatialGrid(&spatialGrid);
 
     m_ui->render();
+    m_menuPause->render();
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     glfwSwapBuffers(m_window);
     glfwPollEvents();

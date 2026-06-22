@@ -32,12 +32,17 @@ ObjectID SceneManager::addModel(const std::string &filename,
                                 const Tag &tag, const glm::vec3 &position,
                                 const glm::vec3 &scale,
                                 const glm::vec3 &rotation) {
-  ObjectID id = nextID();
-  auto mdl = std::make_unique<Model>(filename);
-  if (!mdl->valid())
-    return 0;
+  auto it = m_modelCache.find(filename);
+  if (it == m_modelCache.end()) {
+    auto mdl = std::make_shared<Model>(filename);
+    if (!mdl->valid())
+      return 0;
+    m_modelCache.emplace(filename, std::move(mdl));
+    it = m_modelCache.find(filename);
+  }
 
-  SceneObject obj(id, std::move(mdl), texture, name, tag);
+  ObjectID id = nextID();
+  SceneObject obj(id, it->second.get(), texture, name, tag);
   obj.transform.setPosition(position);
   obj.transform.setRotation(rotation);
   obj.transform.setScale(scale);
@@ -53,7 +58,10 @@ SceneObject *SceneManager::getObject(ObjectID id) {
 }
 
 bool SceneManager::removeObject(ObjectID id) { return m_objects.erase(id) > 0; }
-void SceneManager::clear() { m_objects.clear(); }
+void SceneManager::clear() {
+  m_objects.clear();
+  m_modelCache.clear();
+}
 void SceneManager::clearByTag(const Tag &tag) {
   for (auto it = m_objects.begin(); it != m_objects.end();) {
     if (it->second.tag == tag)
@@ -63,78 +71,79 @@ void SceneManager::clearByTag(const Tag &tag) {
   }
 }
 
-void SceneManager::render(ShaderProgram &shader, const Frustum *frustum) {
+void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
+                          float renderDistance, const glm::vec3 &viewPos) {
   struct BatchKey {
     Mesh *mesh;
     Texture *texture;
+    glm::vec2 uvTiling;
+    glm::vec2 uvOffset;
     bool operator==(const BatchKey &o) const {
-      return mesh == o.mesh && texture == o.texture;
+      return mesh == o.mesh && texture == o.texture && uvTiling == o.uvTiling &&
+             uvOffset == o.uvOffset;
     }
   };
   struct BatchKeyHash {
     size_t operator()(const BatchKey &k) const {
       size_t h1 = std::hash<void *>()(k.mesh);
       size_t h2 = std::hash<void *>()(k.texture);
-      return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL);
+      size_t h3 = std::hash<float>()(k.uvTiling.x) ^
+                  (std::hash<float>()(k.uvTiling.y) * 0x9e3779b97f4a7c15ULL);
+      size_t h4 = std::hash<float>()(k.uvOffset.x) ^
+                  (std::hash<float>()(k.uvOffset.y) * 0x9e3779b97f4a7c15ULL);
+      return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL) ^ (h3 * 0x7feb352d) ^ (h4);
     }
   };
 
   auto isVisible = [&](const SceneObject &obj) -> bool {
     if (!obj.active)
       return false;
+    glm::vec3 pos = obj.transform.getPosition();
+    if (renderDistance > 0.0f) {
+      float dist = glm::length(pos - viewPos);
+      if (dist > renderDistance)
+        return false;
+    }
     if (!frustum)
       return true;
-    glm::vec3 pos = obj.transform.getPosition();
     glm::vec3 scale = obj.transform.getScale();
     AABB box{pos - scale * 0.5f, pos + scale * 0.5f};
     return frustum->isAABBInside(box);
   };
 
   std::unordered_map<BatchKey, std::vector<glm::mat4>, BatchKeyHash> batches;
-  std::vector<SceneObject *> soloObjects;
 
   for (auto &[id, obj] : m_objects) {
     if (!isVisible(obj))
       continue;
-    if (obj.mesh && !obj.model)
-      batches[{obj.mesh, obj.texture}].push_back(
-          obj.transform.getModelMatrix());
-    else
-      soloObjects.push_back(&obj);
-  }
-
-  if (!batches.empty()) {
-    shader.setInt("useInstancing", 1);
-    for (auto &[key, matrices] : batches) {
-      key.mesh->uploadInstances(matrices);
-      if (key.texture) {
-        key.texture->bind(0);
-        shader.setInt("texture1", 0);
-        shader.setInt("useTexture", 1);
-      } else {
-        shader.setInt("useTexture", 0);
+    glm::mat4 modelMatrix = obj.transform.getModelMatrix();
+    if (obj.model) {
+      for (const auto &sub : obj.model->subMeshes()) {
+        batches[{sub.mesh.get(), sub.diffuseTexture.get(), obj.uvTiling,
+                 obj.uvOffset}]
+            .push_back(modelMatrix);
       }
-      key.mesh->drawInstanced(static_cast<int>(matrices.size()));
-    }
-    shader.setInt("useInstancing", 0);
-  }
-
-  for (auto *obj : soloObjects) {
-    shader.setInt("useInstancing", 0);
-    shader.setMat4("model", obj->transform.getModelMatrix());
-    if (obj->model) {
-      obj->model->draw(shader);
-    } else if (obj->mesh) {
-      if (obj->texture) {
-        obj->texture->bind(0);
-        shader.setInt("texture1", 0);
-        shader.setInt("useTexture", 1);
-      } else {
-        shader.setInt("useTexture", 0);
-      }
-      obj->mesh->draw();
+    } else if (obj.mesh) {
+      batches[{obj.mesh, obj.texture, obj.uvTiling, obj.uvOffset}].push_back(
+          modelMatrix);
     }
   }
+
+  shader.setInt("useInstancing", 1);
+  for (auto &[key, matrices] : batches) {
+    key.mesh->uploadInstances(matrices);
+    shader.setVec2("uvTiling", key.uvTiling);
+    shader.setVec2("uvOffset", key.uvOffset);
+    if (key.texture) {
+      key.texture->bind(0);
+      shader.setInt("texture1", 0);
+      shader.setInt("useTexture", 1);
+    } else {
+      shader.setInt("useTexture", 0);
+    }
+    key.mesh->drawInstanced(static_cast<int>(matrices.size()));
+  }
+  shader.setInt("useInstancing", 0);
 }
 
 void SceneManager::buildSpatialGrid(SpatialGrid &grid) const {
