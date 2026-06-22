@@ -1,32 +1,44 @@
-# Necros
+# **Necros**
 
-um remake de um _motor gráfico_ do qual eu tinha feito quando tinha la pros 15 anos (Template Engine).
+_Um remake de um **motor gráfico** que eu criei lá pelos 15 anos (Template Engine)._
+
+> [!WARNING]  
+> **Ainda está em fase de desenvolvimento.**  
+> Faltam muitas funcionalidades e ainda há bugs para corrigir.
 
 ---
 
-## Features:
+## ✨ **Features**
 
-- Movimento básico primeira pessoa
-- Interface simples Imgui
-- Importação de modelos (Assimp)
-- Renderização de objetos/models com batching por mesh/textura.
-- Algoritmo basico de labirinto (Recursive Backtracker).
-- Editor simples: alterar propriedades de objetos como uv, posição, rotação e etc; adição/edição de luzes (directional light, point light e spot lights); gerador de labirinto (modificação na largura, altura, espaçamento, altura das paredes, e comprimento do chão (ajustado com base ao comprimento da grid))
+- 🎮 Movimento básico em primeira pessoa
+- 🖼️ Interface simples com **ImGui**
+- 📦 Importação de modelos via **Assimp**
+- ⚡ Renderização otimizada de objetos com **batching** por mesh/textura
+- 🌀 Algoritmo básico de geração de labirintos (**Recursive Backtracker**)
+- 🛠️ Editor simples:
+  - Alteração de propriedades dos objetos (UV, posição, rotação, etc.)
+  - Adição e edição de luzes (**Directional, Point e Spot**)
+  - Gerador de labirinto com controles de largura, altura, espaçamento, altura das paredes e comprimento do chão
 
-## Controles:
+---
 
-- **W** = Frente
-- **A** = Esquerda
-- **S** = Trás
-- **D** = Direita
+## 🎮 **Controles**
 
-- **Q** = Abre o editor.
-- **Escape** = Pausar o jogo
-- **V** = Voar (com noclip)
-- **Shift esquerdo** = ir para baixo quando estiver voando
-- **Espaço** = Se estiver voando vai para cima, se não estiver vai pular normalmente (igual a um fps normal).
+| Tecla              | Ação                                         |
+| ------------------ | -------------------------------------------- |
+| **W**              | Frente                                       |
+| **A**              | Esquerda                                     |
+| **S**              | Trás                                         |
+| **D**              | Direita                                      |
+| **Q**              | Abre o editor                                |
+| **Esc**            | Pausar o jogo                                |
+| **V**              | Ativar voo (noclip)                          |
+| **Shift Esquerdo** | Descer (quando voando)                       |
+| **Espaço**         | Subir (quando voando) ou Pular (modo normal) |
 
-## Compilar:
+---
 
-- Criei uma script para fazer o processo mais facil: .\b.bat.
-- Se quiser rodar diretamente use --direct (.\b.bat --direct)
+## 🔧 **Compilar**
+
+- **Script facilitado**: `.\b.bat`
+- Para rodar **diretamente**: `.\b.bat --direct`
