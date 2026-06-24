@@ -22,7 +22,28 @@ public:
     Mesh& operator=(const Mesh&) = delete;
 
     void draw() const;
-    void uploadInstances(const std::vector<glm::mat4>& matrices);
+    template <typename Allocator>
+    void uploadInstances(const std::vector<glm::mat4, Allocator>& matrices) {
+      if (matrices.empty())
+        return;
+
+      if (!m_instanceVBO)
+        glGenBuffers(1, &m_instanceVBO);
+
+      glBindVertexArray(m_vao);
+      glBindBuffer(GL_ARRAY_BUFFER, m_instanceVBO);
+      glBufferData(GL_ARRAY_BUFFER, matrices.size() * sizeof(glm::mat4),
+                   matrices.data(), GL_DYNAMIC_DRAW);
+
+      for (int i = 0; i < 4; i++) {
+        glEnableVertexAttribArray(4 + i);
+        glVertexAttribPointer(4 + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
+                              (void *)(i * sizeof(glm::vec4)));
+        glVertexAttribDivisor(4 + i, 1);
+      }
+
+      glBindVertexArray(0);
+    }
     void drawInstanced(int count) const;
     GLuint vao() const;
 

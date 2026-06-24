@@ -23,6 +23,10 @@ void Model::loadModel(const std::string &path) {
     return;
   }
 
+  m_directory = std::filesystem::path(path).parent_path().string();
+  if (!m_directory.empty() && m_directory.back() != '/')
+    m_directory += '/';
+
   processNode(scene->mRootNode, scene);
   m_valid = !m_submeshes.empty();
 }
@@ -76,7 +80,7 @@ void Model::processMesh(aiMesh *mesh, const aiScene *scene) {
     if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
       aiString str;
       material->GetTexture(aiTextureType_DIFFUSE, 0, &str);
-      auto tex = std::make_unique<Texture>(std::string(str.C_Str()));
+      auto tex = std::make_unique<Texture>(m_directory + std::string(str.C_Str()));
       if (tex->id() != 0)
         sub.diffuseTexture = std::move(tex);
     }

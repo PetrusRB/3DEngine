@@ -21,7 +21,7 @@ public:
     m_planes[1] = makePlane(t[3] - t[0], margin);
     m_planes[2] = makePlane(t[3] + t[1], margin);
     m_planes[3] = makePlane(t[3] - t[1], margin);
-    m_planes[4] = makePlane(t[3] + t[2], margin);
+    m_planes[4] = makePlane(t[2], margin);
     m_planes[5] = makePlane(t[3] - t[2], margin);
   }
 

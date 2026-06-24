@@ -4,6 +4,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +37,7 @@ private:
   void processMesh(aiMesh *mesh, const aiScene *scene);
 
   std::vector<SubMesh> m_submeshes;
+  std::string m_directory;
   bool m_valid = false;
 };
 

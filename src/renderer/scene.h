@@ -1,4 +1,5 @@
 #pragma once
+#include "../utils/arena_allocator.h"
 #include "model.h"
 #include "transform.h"
 #include <cstdint>
@@ -48,7 +49,8 @@ public:
                      const std::string &name = "", const Tag &tag = "",
                      const glm::vec3 &position = glm::vec3(0.0f),
                      const glm::vec3 &scale = glm::vec3(1.0f),
-                     const glm::vec3 &rotation = glm::vec3(0.0f));
+                     const glm::vec3 &rotation = glm::vec3(0.0f),
+                     const glm::vec2 &uvTiling = glm::vec3(1.0f));
 
   ObjectID addModel(const std::string &filename, const std::string &name = "",
                     Texture *texture = nullptr, const Tag &tag = "",
@@ -62,7 +64,9 @@ public:
   void clearByTag(const Tag &tag);
 
   void render(ShaderProgram &shader, const Frustum *frustum = nullptr,
-              float renderDistance = 0.0f, const glm::vec3 &viewPos = glm::vec3(0.0f));
+              float renderDistance = 0.0f,
+              const glm::vec3 &viewPos = glm::vec3(0.0f),
+              t_arena *frameArena = nullptr);
   void buildSpatialGrid(SpatialGrid &grid) const;
 
   std::unordered_map<ObjectID, SceneObject> &objects();

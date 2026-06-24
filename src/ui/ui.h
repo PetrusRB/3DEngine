@@ -2,6 +2,7 @@
 
 #define GLFW_INCLUDE_NONE
 #include "../light/light.h"
+#include "../output/output.h"
 #include <GLFW/glfw3.h>
 #include <functional>
 #include <glm/glm.hpp>
@@ -18,6 +19,18 @@ namespace Engine {
 using ObjectID = uint32_t;
 struct SceneObject;
 
+enum class Anchor {
+  TopLeft,
+  TopCenter,
+  TopRight,
+  Left,
+  Center,
+  Right,
+  BottomLeft,
+  BottomCenter,
+  BottomRight
+};
+
 class UI {
 public:
   bool init(GLFWwindow *window);
@@ -31,6 +44,7 @@ public:
 
   void setShininess(float *val);
   void setLights(std::vector<std::unique_ptr<Light>> *lights);
+  void setOutputTerm(OutputTerm *output);
   void setSceneObjects(std::unordered_map<ObjectID, SceneObject> *objects);
 
   void setMazeWidth(int *w);
@@ -44,13 +58,21 @@ public:
 
   void setFrustumDebug(bool *enabled, float *margin, int *visible, int *culled);
 
+  void setMoney(int cents) { m_money = cents; }
+  void renderHUD();
+
 private:
+  ImVec2 getAnchorPos(Anchor anchor, const ImVec2 &windowSize,
+                      const ImVec2 &padding);
+  int m_money = 0;
   void applyStyle(float main_scale);
 
   GLFWwindow *m_window = nullptr;
   float *m_shininess = nullptr;
   std::vector<std::unique_ptr<Light>> *m_lights = nullptr;
   std::unordered_map<ObjectID, SceneObject> *m_sceneObjects = nullptr;
+  OutputTerm *m_output = nullptr;
+
   int *m_mazeWidth = nullptr;
   int *m_mazeHeight = nullptr;
   float *m_wallHeight = nullptr;

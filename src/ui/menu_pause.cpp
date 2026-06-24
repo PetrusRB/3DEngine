@@ -77,8 +77,8 @@ void MenuPause::renderSettings() {
   ImGui::Separator();
   ImGui::SliderFloat("Render Distance", &m_settings.renderDistance, 20.0f,
                      500.0f, "%.0f m");
-  ImGui::SliderFloat("Fog Start", &m_settings.fogStart, 10.0f, 400.0f);
-  ImGui::SliderFloat("Fog End", &m_settings.fogEnd, 20.0f, 500.0f);
+  ImGui::SliderFloat("Fog Start", &m_settings.fogStart, 18.715f, 400.0f);
+  ImGui::SliderFloat("Fog End", &m_settings.fogEnd, 65.922f, 500.0f);
   ImGui::ColorEdit3("Fog Color", &m_settings.fogColor.x,
                     ImGuiColorEditFlags_NoInputs);
 

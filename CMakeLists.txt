@@ -7,11 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_SOURCE_DIR}/include/arena)
+include_directories(${CMAKE_SOURCE_DIR}/include/arena/internal)
+include_directories(${CMAKE_SOURCE_DIR}/include/arena/core)
+include_directories(${CMAKE_SOURCE_DIR}/include/arena/core/allocation)
 include_directories(C:/msys64/mingw64/include)
 
 file(GLOB_RECURSE SRC_FILES src/*.cpp src/*.c)
 list(FILTER SRC_FILES EXCLUDE REGEX "tabs\\.cpp$")
 list(FILTER SRC_FILES EXCLUDE REGEX "obj\\.c$")
+list(FILTER SRC_FILES EXCLUDE REGEX "arena_visualizer\\.c$")
 file(GLOB IMGUI_SOURCES
     include/imgui/imgui.cpp
     include/imgui/imgui_draw.cpp

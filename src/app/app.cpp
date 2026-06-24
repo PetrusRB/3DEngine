@@ -1,9 +1,14 @@
 #include "app.h"
+#include "../utils/arena_wrapper.h"
+#include <glm/ext/vector_float3.hpp>
 #define GLFW_INCLUDE_NONE
 #include "../algorithm/maze.h"
 #include "../camera/camera.h"
 #include "../cubemap/cubemap.h"
+#include "../economy/economy.h"
+#include "../events/event_sys.h"
 #include "../light/light.h"
+#include "../output/output.h"
 #include "../physics/spatial_grid.h"
 #include "../player/player.h"
 #include "../renderer/frustum.h"
@@ -15,6 +20,7 @@
 #include "../ui/menu_pause.h"
 #include "../ui/ui.h"
 #include "../utils/input.h"
+#include "../utils/utils.h"
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <glad/glad.h>
@@ -38,6 +44,8 @@ Application::Application(WindowConfig config) : m_config(std::move(config)) {
 Application::~Application() { destroy(); }
 
 void Application::init() {
+  m_frameArena = arena_wrap_create(4 * 1024 * 1024);
+
   if (!glfwInit())
     throw std::runtime_error("Falha ao inicializar o GLFW");
 
@@ -60,15 +68,18 @@ void Application::init() {
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
 
+  m_output = std::make_unique<OutputTerm>();
   m_ui = std::make_unique<UI>();
   m_ui->init(m_window);
+  m_ui->setOutputTerm(m_output.get());
 
   m_menuPause = std::make_unique<MenuPause>();
 
   m_input = std::make_unique<InputManager>(m_window);
   m_cubemap = std::make_unique<Cubemap>();
   m_camera = std::make_unique<Camera>(glm::vec3(0.0f, 1.7f, 0.0f));
-  m_player = std::make_unique<Player>(*m_camera, *m_input);
+  m_event = std::make_unique<EventSystem>();
+  m_player = std::make_unique<Player>(*m_camera, *m_input, m_event.get());
 
   m_shader = std::make_unique<ShaderProgram>("src/assets/shaders/color.vs",
                                              "src/assets/shaders/color.fs");
@@ -85,7 +96,11 @@ void Application::init() {
   m_ui->setMazeWallHeight(&m_wallHeight);
   m_ui->setMazeFloorThickness(&m_floorThickness);
   m_ui->setMazeCellSize(&m_cellSize);
-  m_ui->setOnMazeRebuild([this]() { buildMaze(); });
+  m_ui->setOnMazeRebuild([this]() {
+    buildMaze();
+    recreate_coins();
+  });
+  m_utils = std::make_unique<Utils>();
 
   m_scene = std::make_unique<SceneManager>();
   m_player->setScene(m_scene.get());
@@ -158,28 +173,81 @@ void Application::init() {
   };
 
   m_cubeMesh = std::make_unique<Mesh>(cubeVertices);
+  m_economy = std::make_unique<Economy>();
 
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/liminal/backroom-wall.png"));
   m_textures.push_back(
       std::make_unique<Texture>("src/assets/textures/liminal/carpet.png"));
 
+  m_textures.push_back(
+      std::make_unique<Texture>("src/assets/textures/nature/lava002.jpg"));
+
   buildMaze();
 
   Texture *wallTex = m_textures[0].get();
+  Texture *lava = m_textures[2].get();
 
-  m_coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin", "persistent",
-                              glm::vec3(5.0f, 0.5f, 5.0f), glm::vec3(0.5f));
+  glm::vec3 coinPositions[] = {
+      glm::vec3(5.0f, 0.5f, 5.0f),  glm::vec3(10.0f, 0.5f, 3.0f),
+      glm::vec3(3.0f, 0.5f, 10.0f), glm::vec3(7.0f, 0.5f, 7.0f),
+      glm::vec3(1.0f, 0.5f, 1.0f),
+  };
 
-  m_scene->addModel("src/assets/models/teapot/teapot.obj", "Teapot", nullptr,
+  for (auto &pos : coinPositions) {
+    ObjectID coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin",
+                                       "coin", pos, glm::vec3(0.5f));
+    m_coins.push_back(coin);
+    m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
+      m_economy->addMoney(&player, 50);
+      m_scene->removeObject(obj.id);
+      m_event->remove(obj.id);
+      m_coins.erase(std::remove(m_coins.begin(), m_coins.end(), obj.id),
+                    m_coins.end());
+    });
+  }
+
+  ObjectID m_lava =
+      m_scene->addObject(m_cubeMesh.get(), lava, "Kill", "persistent",
+                         glm::vec3(9.0f, 0.5f, 7.0f), glm::vec3(0.5f));
+  m_scene->addModel("src/assets/models/teapot/teapot.obj", "Teapot", wallTex,
                     "persistent", glm::vec3(8.0f, 7.0f, 3.0f),
                     glm::vec3(0.05f, 0.05f, 0.05f));
 
-  m_scene->addModel("src/assets/models/radio/radio.fbx", "Radio", wallTex,
-                    "persistent", glm::vec3(2.0f, 7.0f, 1.0f),
-                    glm::vec3(0.2f, 0.2f, 0.2f));
-
+  // quando tocar na lava
+  m_event->onCollision(m_lava, [this](Player &player, SceneObject &obj) {
+    glm::vec3 curr_pos = player.transform.getPosition();
+    std::string randomJk = m_utils->getRandomJoke();
+    m_output->addLog(randomJk, static_cast<float>(glfwGetTime()));
+    player.setTeleportPending(
+        glm::vec3(curr_pos.x, curr_pos.y + 15.0f, curr_pos.z));
+  });
   m_input->disableCursor();
+}
+
+void Application::recreate_coins() {
+  if (!m_coins.empty()) {
+    return;
+  }
+
+  glm::vec3 coinPositions[] = {
+      glm::vec3(5.0f, 0.5f, 5.0f),  glm::vec3(10.0f, 0.5f, 3.0f),
+      glm::vec3(3.0f, 0.5f, 10.0f), glm::vec3(7.0f, 0.5f, 7.0f),
+      glm::vec3(1.0f, 0.5f, 1.0f),
+  };
+
+  for (auto &pos : coinPositions) {
+    ObjectID coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin",
+                                       "coin", pos, glm::vec3(0.5f));
+    m_coins.push_back(coin);
+    m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
+      m_economy->addMoney(&player, 50);
+      m_scene->removeObject(obj.id);
+      m_event->remove(obj.id);
+      m_coins.erase(std::remove(m_coins.begin(), m_coins.end(), obj.id),
+                    m_coins.end());
+    });
+  }
 }
 
 void Application::buildMaze() {
@@ -204,19 +272,50 @@ void Application::buildMaze() {
   float centerX = (gridWidth - 1) * m_cellSize * 0.5f;
   float centerZ = (gridHeight - 1) * m_cellSize * 0.5f;
 
-  m_scene->addObject(m_cubeMesh.get(), floorTex, "Floor", maze_prefix,
-                     glm::vec3(centerX, -m_floorThickness * 0.5f, centerZ),
-                     glm::vec3(totalWidth, m_floorThickness, totalDepth));
+  m_scene->addObject(
+      m_cubeMesh.get(), floorTex, "Floor", maze_prefix,
+      glm::vec3(centerX, -m_floorThickness * 0.5f - 0.001f, centerZ),
+      glm::vec3(totalWidth, m_floorThickness, totalDepth), glm::vec3(0.0f),
+      glm::vec2(totalWidth / m_cellSize, totalWidth / m_cellSize));
+
+  std::vector<std::vector<bool>> visited(gridHeight,
+                                         std::vector<bool>(gridWidth, false));
 
   for (uint32_t y = 0; y < gridHeight; y++) {
     for (uint32_t x = 0; x < gridWidth; x++) {
-      if (grid[y][x] == 1) {
-        float px = x * m_cellSize;
-        float pz = y * m_cellSize;
-        m_scene->addObject(m_cubeMesh.get(), wallTex, "Wall", maze_prefix,
-                           glm::vec3(px, m_wallHeight * 0.5f, pz),
-                           glm::vec3(1.0f, m_wallHeight, 1.0f));
+      if (grid[y][x] != 1 || visited[y][x])
+        continue;
+
+      uint32_t runX = x;
+      while (runX < gridWidth && grid[y][runX] == 1 && !visited[y][runX])
+        runX++;
+      uint32_t lenX = runX - x;
+
+      uint32_t runY = y + 1;
+      bool canGrowY = true;
+      while (canGrowY && runY < gridHeight) {
+        for (uint32_t cx = x; cx < runX; cx++) {
+          if (grid[runY][cx] != 1 || visited[runY][cx]) {
+            canGrowY = false;
+            break;
+          }
+        }
+        if (canGrowY)
+          runY++;
       }
+      uint32_t lenY = runY - y;
+
+      for (uint32_t cy = y; cy < y + lenY; cy++)
+        for (uint32_t cx = x; cx < x + lenX; cx++)
+          visited[cy][cx] = true;
+
+      float px = (x + (lenX - 1) * 0.5f) * m_cellSize;
+      float pz = (y + (lenY - 1) * 0.5f) * m_cellSize;
+
+      m_scene->addObject(m_cubeMesh.get(), wallTex, "Wall", maze_prefix,
+                         glm::vec3(px, m_wallHeight * 0.5f, pz),
+                         glm::vec3(lenX * 1.0f, m_wallHeight, lenY * 1.0f),
+                         glm::vec3(0.0f), glm::vec2(lenX, lenY));
     }
   }
 }
@@ -227,6 +326,8 @@ void Application::run() {
   SpatialGrid spatialGrid(m_cellSize * 2.0f);
 
   while (!glfwWindowShouldClose(m_window)) {
+    arena_wrap_reset(m_frameArena);
+
     float currentFrame = static_cast<float>(glfwGetTime());
     float deltaTime = currentFrame - lastFrame;
     lastFrame = currentFrame;
@@ -264,9 +365,13 @@ void Application::run() {
     m_ui->setUIPlayerState(m_player->isFlying(), m_player->isOnGround(),
                            m_player->transform.getPosition());
 
-    SceneObject *rotCube = m_scene->getObject(m_coin);
-    if (rotCube && rotCube->active)
-      rotCube->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
+    m_ui->setMoney(static_cast<int>(m_player->getMoney()));
+
+    for (ObjectID coinId : m_coins) {
+      SceneObject *coin = m_scene->getObject(coinId);
+      if (coin && coin->active)
+        coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
+    }
 
     int width, height;
     glfwGetFramebufferSize(m_window, &width, &height);
@@ -341,13 +446,26 @@ void Application::run() {
       case Light::POINT: {
         auto *pl = static_cast<PointLight *>(light.get());
         snprintf(p, sizeof(p), "pointLights[%d]", pointCount);
+        glm::vec3 cameraPos = m_camera->getPosition();
+        glm::vec3 baseDiffuse = pl->diffuse;
+        float start = m_menuPause->settings().fadeStart;
+        float end = m_menuPause->settings().fadeEnd;
+
+        float maxLightDistance = end + 10.0f;
+        float dist = glm::length(cameraPos - pl->position);
+        if (dist > maxLightDistance) {
+          continue;
+        }
+        float fade =
+            1.0f - glm::clamp((dist - start) / (end - start), 0.0f, 1.0f);
+        glm::vec3 mixedDiffuse = baseDiffuse * fade;
         std::string prefix(p);
         m_shader->setVec3(prefix + ".position", pl->position);
         m_shader->setFloat(prefix + ".constant", pl->constant);
         m_shader->setFloat(prefix + ".linear", pl->linear);
         m_shader->setFloat(prefix + ".quadratic", pl->quadratic);
         m_shader->setVec3(prefix + ".ambient", pl->ambient);
-        m_shader->setVec3(prefix + ".diffuse", pl->diffuse);
+        m_shader->setVec3(prefix + ".diffuse", mixedDiffuse);
         m_shader->setVec3(prefix + ".specular", pl->specular);
         pointCount++;
         break;
@@ -384,7 +502,7 @@ void Application::run() {
 
     m_scene->render(*m_shader, m_frustumEnabled ? &frustum : nullptr,
                     m_menuPause->settings().fogEnd + 20.0f,
-                    m_camera->getPosition());
+                    m_camera->getPosition(), m_frameArena);
 
     // Rebuild spatial grid
     spatialGrid.clear();
@@ -392,6 +510,7 @@ void Application::run() {
     m_player->setSpatialGrid(&spatialGrid);
 
     m_ui->render();
+    m_ui->renderHUD();
     m_menuPause->render();
 
     ImGui::Render();
@@ -404,14 +523,21 @@ void Application::run() {
 
 void Application::destroy() {
   m_ui.reset();
+  m_menuPause.reset();
+  m_output.reset();
   m_scene.reset();
   m_cubeMesh.reset();
   m_textures.clear();
+  m_skyboxShader.reset();
   m_shader.reset();
   m_player.reset();
+  m_utils.reset();
+  m_economy.reset();
   m_camera.reset();
   m_input.reset();
   m_cubemap.reset();
+
+  arena_wrap_destroy(m_frameArena);
 
   if (m_window) {
     glfwDestroyWindow(m_window);

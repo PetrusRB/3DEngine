@@ -17,12 +17,14 @@ ObjectID SceneManager::addObject(Mesh *mesh, Texture *texture,
                                  const std::string &name, const Tag &tag,
                                  const glm::vec3 &position,
                                  const glm::vec3 &scale,
-                                 const glm::vec3 &rotation) {
+                                 const glm::vec3 &rotation,
+                                 const glm::vec2 &uvTiling) {
   ObjectID id = nextID();
   SceneObject obj(id, mesh, texture, name, tag);
   obj.transform.setPosition(position);
   obj.transform.setRotation(rotation);
   obj.transform.setScale(scale);
+  obj.uvTiling = uvTiling;
   m_objects.emplace(id, std::move(obj));
   return id;
 }
@@ -72,7 +74,8 @@ void SceneManager::clearByTag(const Tag &tag) {
 }
 
 void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
-                          float renderDistance, const glm::vec3 &viewPos) {
+                          float renderDistance, const glm::vec3 &viewPos,
+                          t_arena *frameArena) {
   struct BatchKey {
     Mesh *mesh;
     Texture *texture;
@@ -99,19 +102,23 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
     if (!obj.active)
       return false;
     glm::vec3 pos = obj.transform.getPosition();
+    glm::vec3 scale = obj.transform.getScale();
+    AABB box{pos - scale * 0.5f, pos + scale * 0.5f};
     if (renderDistance > 0.0f) {
-      float dist = glm::length(pos - viewPos);
+      glm::vec3 closest = glm::clamp(viewPos, box.min, box.max);
+      float dist = glm::length(viewPos - closest);
       if (dist > renderDistance)
         return false;
     }
     if (!frustum)
       return true;
-    glm::vec3 scale = obj.transform.getScale();
-    AABB box{pos - scale * 0.5f, pos + scale * 0.5f};
+
     return frustum->isAABBInside(box);
   };
 
-  std::unordered_map<BatchKey, std::vector<glm::mat4>, BatchKeyHash> batches;
+  using MatVec = std::vector<glm::mat4, ArenaAllocator<glm::mat4>>;
+  ArenaAllocator<glm::mat4> matAlloc(frameArena);
+  std::unordered_map<BatchKey, MatVec, BatchKeyHash> batches;
 
   for (auto &[id, obj] : m_objects) {
     if (!isVisible(obj))
@@ -119,13 +126,17 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
     glm::mat4 modelMatrix = obj.transform.getModelMatrix();
     if (obj.model) {
       for (const auto &sub : obj.model->subMeshes()) {
-        batches[{sub.mesh.get(), sub.diffuseTexture.get(), obj.uvTiling,
-                 obj.uvOffset}]
-            .push_back(modelMatrix);
+        Texture *tex = sub.diffuseTexture.get();
+        if (!tex)
+          tex = obj.texture;
+        BatchKey key{sub.mesh.get(), tex, obj.uvTiling, obj.uvOffset};
+        auto [it, _] = batches.try_emplace(key, MatVec(matAlloc));
+        it->second.push_back(modelMatrix);
       }
     } else if (obj.mesh) {
-      batches[{obj.mesh, obj.texture, obj.uvTiling, obj.uvOffset}].push_back(
-          modelMatrix);
+      BatchKey key{obj.mesh, obj.texture, obj.uvTiling, obj.uvOffset};
+      auto [it, _] = batches.try_emplace(key, MatVec(matAlloc));
+      it->second.push_back(modelMatrix);
     }
   }
 

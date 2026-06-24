@@ -1,5 +1,7 @@
 #include "ui.h"
 #include "../renderer/scene.h"
+#include "../utils/utils.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <imgui/imgui.h>
@@ -275,6 +277,24 @@ void UI::renderMain() {
       }
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("Output")) {
+      if (m_output) {
+        int write = m_output->getWriteBuffer();
+        std::string *buffer = m_output->getBuffer();
+        bool hasContent = false;
+        int maxCapacity = m_output->getMaxCapacity();
+        for (int i = 0; i < maxCapacity; i++) {
+          int idx = (write + i) % 5;
+          if (!buffer[idx].empty()) {
+            ImGui::Text("%s", buffer[idx].c_str());
+            hasContent = true;
+          }
+        }
+        if (!hasContent)
+          ImGui::Text("Buffer vazio");
+      }
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("Maze")) {
       if (m_mazeWidth)
         ImGui::SliderInt("Width", m_mazeWidth, 3, 51, "%d");
@@ -298,6 +318,7 @@ void UI::renderMain() {
 }
 
 void UI::setShininess(float *val) { m_shininess = val; }
+void UI::setOutputTerm(OutputTerm *output) { m_output = output; }
 void UI::setLights(std::vector<std::unique_ptr<Light>> *lights) {
   m_lights = lights;
 }
@@ -325,6 +346,58 @@ void UI::setFrustumDebug(bool *enabled, float *margin, int *visible,
   m_frustumMargin = margin;
   m_visibleObjects = visible;
   m_culledObjects = culled;
+}
+
+ImVec2 UI::getAnchorPos(Anchor anchor, const ImVec2 &windowSize,
+                        const ImVec2 &padding) {
+  ImVec2 display = ImGui::GetIO().DisplaySize;
+  switch (anchor) {
+  case Anchor::TopLeft:
+    return padding;
+  case Anchor::TopCenter:
+    return ImVec2((display.x - windowSize.x) * 0.5f, padding.y);
+  case Anchor::TopRight:
+    return ImVec2(display.x - windowSize.x - padding.x, padding.y);
+  case Anchor::Left:
+    return ImVec2(padding.x, (display.y - windowSize.y) * 0.5f);
+  case Anchor::Center:
+    return ImVec2((display.x - windowSize.x) * 0.5f,
+                  (display.y - windowSize.y) * 0.5f);
+  case Anchor::Right:
+    return ImVec2(display.x - windowSize.x - padding.x,
+                  (display.y - windowSize.y) * 0.5f);
+  case Anchor::BottomLeft:
+    return ImVec2(padding.x, display.y - windowSize.y - padding.y);
+  case Anchor::BottomCenter:
+    return ImVec2((display.x - windowSize.x) * 0.5f,
+                  display.y - windowSize.y - padding.y);
+  case Anchor::BottomRight:
+    return ImVec2(display.x - windowSize.x - padding.x,
+                  display.y - windowSize.y - padding.y);
+  }
+  return padding;
+}
+
+void UI::renderHUD() {
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing |
+      ImGuiWindowFlags_NoNav;
+
+  ImVec2 pad(20.0f, 20.0f);
+
+  // HUD TopRight — Money
+  std::string moneyText = Utils::formatCoin(m_money, Currency::USD);
+  ImVec2 moneySize = ImGui::CalcTextSize(moneyText.c_str());
+  ImVec2 moneyWinSize = ImVec2(moneySize.x + 24.0f, moneySize.y + 16.0f);
+
+  ImGui::SetNextWindowPos(getAnchorPos(Anchor::TopRight, moneyWinSize, pad),
+                          ImGuiCond_Always);
+  ImGui::SetNextWindowSize(moneyWinSize, ImGuiCond_Always);
+  ImGui::Begin("##hud_money", nullptr, flags);
+  ImGui::SetCursorPosY((moneyWinSize.y - moneySize.y) * 0.5f);
+  ImGui::Text("%s", moneyText.c_str());
+  ImGui::End();
 }
 
 void UI::applyStyle(float main_scale) {

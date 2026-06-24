@@ -7,8 +7,10 @@ class InputManager;
 
 struct GameSettings {
   float renderDistance = 200.0f;
-  float fogStart = 60.0f;
-  float fogEnd = 200.0f;
+  float fadeEnd = 17.0f;
+  float fadeStart = fadeEnd * 0.7f;
+  float fogStart = 18.715f;
+  float fogEnd = 65.922f;
   glm::vec3 fogColor{0.5f};
 };
 

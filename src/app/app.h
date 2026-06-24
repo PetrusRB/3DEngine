@@ -1,4 +1,5 @@
 #pragma once
+#include "../utils/arena_wrapper.h"
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
@@ -12,8 +13,12 @@ namespace Engine {
 using ObjectID = uint32_t;
 class Camera;
 class Cubemap;
+class OutputTerm;
+class Utils;
 class InputManager;
+class Economy;
 class Player;
+class EventSystem;
 class ShaderProgram;
 class SceneManager;
 class Mesh;
@@ -42,6 +47,7 @@ public:
 private:
   void init();
   void destroy();
+  void recreate_coins();
 
   GLFWwindow *m_window = nullptr;
   WindowConfig m_config;
@@ -51,6 +57,10 @@ private:
 
   std::unique_ptr<Camera> m_camera;
   std::unique_ptr<InputManager> m_input;
+  std::unique_ptr<EventSystem> m_event;
+  std::unique_ptr<Utils> m_utils;
+  std::unique_ptr<Economy> m_economy;
+  std::unique_ptr<OutputTerm> m_output;
   std::unique_ptr<Player> m_player;
   std::unique_ptr<ShaderProgram> m_shader;
   std::unique_ptr<ShaderProgram> m_skyboxShader;
@@ -69,7 +79,8 @@ private:
   float m_wallHeight = 4.0f;
   float m_floorThickness = 0.1f;
   float m_cellSize = 2.0f;
-  ObjectID m_coin = 0;
+  std::vector<ObjectID> m_coins;
+  t_arena *m_frameArena = nullptr;
   bool m_frustumEnabled = true;
   float m_frustumMargin = 0.1f;
   int m_visibleObjects = 0;
