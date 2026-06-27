@@ -27,12 +27,13 @@ file(GLOB IMGUI_SOURCES
 )
 add_executable(3DEngine ${SRC_FILES} ${IMGUI_SOURCES})
 
-target_link_directories(3DEngine PRIVATE C:/msys64/mingw64/lib)
+target_link_directories(3DEngine PRIVATE C:/msys64/mingw64/lib fmt::fmt)
 
 target_link_libraries(3DEngine
     "C:/GLFW_mingw64/lib-mingw-w64/libglfw3.a"
     opengl32
     gdi32
+    fmt
     user32
     shell32
     assimp

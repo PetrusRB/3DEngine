@@ -23,6 +23,7 @@
 #include "../utils/utils.h"
 #include <GLFW/glfw3.h>
 #include <cstdio>
+#include <fmt/format.h>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -33,10 +34,6 @@
 
 namespace Engine {
 
-static void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
-  glViewport(0, 0, width, height);
-}
-
 Application::Application(WindowConfig config) : m_config(std::move(config)) {
   init();
 }
@@ -46,36 +43,17 @@ Application::~Application() { destroy(); }
 void Application::init() {
   m_frameArena = arena_wrap_create(4 * 1024 * 1024);
 
-  if (!glfwInit())
-    throw std::runtime_error("Falha ao inicializar o GLFW");
-
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-  m_window = glfwCreateWindow(m_config.width, m_config.height,
-                              m_config.title.c_str(), nullptr, nullptr);
-  if (!m_window) {
-    glfwTerminate();
-    throw std::runtime_error("Falha ao criar a janela");
-  }
-  glfwMakeContextCurrent(m_window);
-  glfwSetFramebufferSizeCallback(m_window, framebufferSizeCallback);
-
-  if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    throw std::runtime_error("Falha ao inicializar GLAD");
-
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_CULL_FACE);
+  m_window = std::make_unique<Window>(m_config);
+  GLFWwindow *native = m_window->getNativeWindow();
 
   m_output = std::make_unique<OutputTerm>();
   m_ui = std::make_unique<UI>();
-  m_ui->init(m_window);
+  m_ui->init(native);
   m_ui->setOutputTerm(m_output.get());
 
   m_menuPause = std::make_unique<MenuPause>();
 
-  m_input = std::make_unique<InputManager>(m_window);
+  m_input = std::make_unique<InputManager>(native);
   m_cubemap = std::make_unique<Cubemap>();
   m_camera = std::make_unique<Camera>(glm::vec3(0.0f, 1.7f, 0.0f));
   m_event = std::make_unique<EventSystem>();
@@ -98,7 +76,9 @@ void Application::init() {
   m_ui->setMazeCellSize(&m_cellSize);
   m_ui->setOnMazeRebuild([this]() {
     buildMaze();
-    recreate_coins();
+    if (m_coins.empty()) {
+      recreate_coins();
+    }
   });
   m_utils = std::make_unique<Utils>();
 
@@ -182,35 +162,20 @@ void Application::init() {
 
   m_textures.push_back(
       std::make_unique<Texture>("src/assets/textures/nature/lava002.jpg"));
+  m_textures.push_back(std::make_unique<Texture>(
+      "src/assets/textures/building_template/gray_grid.png"));
 
   buildMaze();
 
-  Texture *wallTex = m_textures[0].get();
   Texture *lava = m_textures[2].get();
+  Texture *gray = m_textures[3].get();
 
-  glm::vec3 coinPositions[] = {
-      glm::vec3(5.0f, 0.5f, 5.0f),  glm::vec3(10.0f, 0.5f, 3.0f),
-      glm::vec3(3.0f, 0.5f, 10.0f), glm::vec3(7.0f, 0.5f, 7.0f),
-      glm::vec3(1.0f, 0.5f, 1.0f),
-  };
-
-  for (auto &pos : coinPositions) {
-    ObjectID coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin",
-                                       "coin", pos, glm::vec3(0.5f));
-    m_coins.push_back(coin);
-    m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
-      m_economy->addMoney(&player, 50);
-      m_scene->removeObject(obj.id);
-      m_event->remove(obj.id);
-      m_coins.erase(std::remove(m_coins.begin(), m_coins.end(), obj.id),
-                    m_coins.end());
-    });
-  }
+  recreate_coins();
 
   ObjectID m_lava =
       m_scene->addObject(m_cubeMesh.get(), lava, "Kill", "persistent",
                          glm::vec3(9.0f, 0.5f, 7.0f), glm::vec3(0.5f));
-  m_scene->addModel("src/assets/models/teapot/teapot.obj", "Teapot", wallTex,
+  m_scene->addModel("src/assets/models/teapot/teapot.obj", "Teapot", gray,
                     "persistent", glm::vec3(8.0f, 7.0f, 3.0f),
                     glm::vec3(0.05f, 0.05f, 0.05f));
 
@@ -226,22 +191,15 @@ void Application::init() {
 }
 
 void Application::recreate_coins() {
-  if (!m_coins.empty()) {
-    return;
-  }
-
-  glm::vec3 coinPositions[] = {
-      glm::vec3(5.0f, 0.5f, 5.0f),  glm::vec3(10.0f, 0.5f, 3.0f),
-      glm::vec3(3.0f, 0.5f, 10.0f), glm::vec3(7.0f, 0.5f, 7.0f),
-      glm::vec3(1.0f, 0.5f, 1.0f),
-  };
-
   for (auto &pos : coinPositions) {
     ObjectID coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin",
                                        "coin", pos, glm::vec3(0.5f));
     m_coins.push_back(coin);
     m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
       m_economy->addMoney(&player, 50);
+      m_output->addLog(fmt::format("Pegou a moeda {}, o jogador ganhou {}",
+                                   obj.id, player.getMoney()),
+                       static_cast<float>(glfwGetTime()));
       m_scene->removeObject(obj.id);
       m_event->remove(obj.id);
       m_coins.erase(std::remove(m_coins.begin(), m_coins.end(), obj.id),
@@ -276,7 +234,13 @@ void Application::buildMaze() {
       m_cubeMesh.get(), floorTex, "Floor", maze_prefix,
       glm::vec3(centerX, -m_floorThickness * 0.5f - 0.001f, centerZ),
       glm::vec3(totalWidth, m_floorThickness, totalDepth), glm::vec3(0.0f),
-      glm::vec2(totalWidth / m_cellSize, totalWidth / m_cellSize));
+      glm::vec2(totalWidth / m_cellSize, totalWidth / m_cellSize), 0.0f);
+  m_scene->addObject(
+      m_cubeMesh.get(), floorTex, "Roof", maze_prefix,
+      glm::vec3(centerX, m_wallHeight + m_floorThickness * 0.5f - 0.001f,
+                centerZ),
+      glm::vec3(totalWidth, m_floorThickness, totalDepth), glm::vec3(0.0f),
+      glm::vec2(totalWidth / m_cellSize, totalWidth / m_cellSize), 0.0f);
 
   std::vector<std::vector<bool>> visited(gridHeight,
                                          std::vector<bool>(gridWidth, false));
@@ -325,7 +289,7 @@ void Application::run() {
   Frustum frustum;
   SpatialGrid spatialGrid(m_cellSize * 2.0f);
 
-  while (!glfwWindowShouldClose(m_window)) {
+  while (!m_window->shouldClose()) {
     arena_wrap_reset(m_frameArena);
 
     float currentFrame = static_cast<float>(glfwGetTime());
@@ -335,7 +299,7 @@ void Application::run() {
     m_menuPause->update(*m_input);
 
     if (m_menuPause->shouldQuit())
-      glfwSetWindowShouldClose(m_window, true);
+      glfwSetWindowShouldClose(m_window->getNativeWindow(), true);
 
     bool menuJustOpened = m_menuPause->isPaused() && !m_menuPause->wasPaused();
     bool menuJustClosed = !m_menuPause->isPaused() && m_menuPause->wasPaused();
@@ -374,7 +338,7 @@ void Application::run() {
     }
 
     int width, height;
-    glfwGetFramebufferSize(m_window, &width, &height);
+    glfwGetFramebufferSize(m_window->getNativeWindow(), &width, &height);
     float aspect = (height > 0)
                        ? static_cast<float>(width) / static_cast<float>(height)
                        : 1.0f;
@@ -516,8 +480,7 @@ void Application::run() {
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    glfwSwapBuffers(m_window);
-    glfwPollEvents();
+    m_window->update();
   }
 }
 
@@ -539,11 +502,7 @@ void Application::destroy() {
 
   arena_wrap_destroy(m_frameArena);
 
-  if (m_window) {
-    glfwDestroyWindow(m_window);
-    m_window = nullptr;
-  }
-  glfwTerminate();
+  m_window.reset();
 }
 
 } // namespace Engine

@@ -13,18 +13,18 @@ namespace Engine {
 
 SceneManager::~SceneManager() { clear(); }
 
-ObjectID SceneManager::addObject(Mesh *mesh, Texture *texture,
-                                 const std::string &name, const Tag &tag,
-                                 const glm::vec3 &position,
-                                 const glm::vec3 &scale,
-                                 const glm::vec3 &rotation,
-                                 const glm::vec2 &uvTiling) {
+ObjectID
+SceneManager::addObject(Mesh *mesh, Texture *texture, const std::string &name,
+                        const Tag &tag, const glm::vec3 &position,
+                        const glm::vec3 &scale, const glm::vec3 &rotation,
+                        const glm::vec2 &uvTiling, const float &reflect) {
   ObjectID id = nextID();
   SceneObject obj(id, mesh, texture, name, tag);
   obj.transform.setPosition(position);
   obj.transform.setRotation(rotation);
   obj.transform.setScale(scale);
   obj.uvTiling = uvTiling;
+  obj.reflectStrength = reflect;
   m_objects.emplace(id, std::move(obj));
   return id;
 }
@@ -33,7 +33,8 @@ ObjectID SceneManager::addModel(const std::string &filename,
                                 const std::string &name, Texture *texture,
                                 const Tag &tag, const glm::vec3 &position,
                                 const glm::vec3 &scale,
-                                const glm::vec3 &rotation) {
+                                const glm::vec3 &rotation,
+                                const float &reflect) {
   auto it = m_modelCache.find(filename);
   if (it == m_modelCache.end()) {
     auto mdl = std::make_shared<Model>(filename);
@@ -48,6 +49,7 @@ ObjectID SceneManager::addModel(const std::string &filename,
   obj.transform.setPosition(position);
   obj.transform.setRotation(rotation);
   obj.transform.setScale(scale);
+  obj.reflectStrength = reflect;
   m_objects.emplace(id, std::move(obj));
   return id;
 }
@@ -81,9 +83,10 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
     Texture *texture;
     glm::vec2 uvTiling;
     glm::vec2 uvOffset;
+    float reflectStrength;
     bool operator==(const BatchKey &o) const {
       return mesh == o.mesh && texture == o.texture && uvTiling == o.uvTiling &&
-             uvOffset == o.uvOffset;
+             uvOffset == o.uvOffset && reflectStrength == o.reflectStrength;
     }
   };
   struct BatchKeyHash {
@@ -94,7 +97,10 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
                   (std::hash<float>()(k.uvTiling.y) * 0x9e3779b97f4a7c15ULL);
       size_t h4 = std::hash<float>()(k.uvOffset.x) ^
                   (std::hash<float>()(k.uvOffset.y) * 0x9e3779b97f4a7c15ULL);
-      return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL) ^ (h3 * 0x7feb352d) ^ (h4);
+      size_t h5 =
+          std::hash<int>()(*reinterpret_cast<const int *>(&k.reflectStrength));
+      return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL) ^ (h3 * 0x7feb352d) ^ (h4) ^
+             (h5 * 0x517cc1b7);
     }
   };
 
@@ -129,12 +135,14 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
         Texture *tex = sub.diffuseTexture.get();
         if (!tex)
           tex = obj.texture;
-        BatchKey key{sub.mesh.get(), tex, obj.uvTiling, obj.uvOffset};
+        BatchKey key{sub.mesh.get(), tex, obj.uvTiling, obj.uvOffset,
+                     obj.reflectStrength};
         auto [it, _] = batches.try_emplace(key, MatVec(matAlloc));
         it->second.push_back(modelMatrix);
       }
     } else if (obj.mesh) {
-      BatchKey key{obj.mesh, obj.texture, obj.uvTiling, obj.uvOffset};
+      BatchKey key{obj.mesh, obj.texture, obj.uvTiling, obj.uvOffset,
+                   obj.reflectStrength};
       auto [it, _] = batches.try_emplace(key, MatVec(matAlloc));
       it->second.push_back(modelMatrix);
     }
@@ -145,6 +153,7 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
     key.mesh->uploadInstances(matrices);
     shader.setVec2("uvTiling", key.uvTiling);
     shader.setVec2("uvOffset", key.uvOffset);
+    shader.setFloat("reflectStrength", key.reflectStrength);
     if (key.texture) {
       key.texture->bind(0);
       shader.setInt("texture1", 0);

@@ -46,8 +46,11 @@ void Camera::processMouse(float xoffset, float yoffset) {
     m_pitch = 89.0f;
   if (m_pitch < -89.0f)
     m_pitch = -89.0f;
+}
 
+void Camera::refreshVectors() {
   updateVectors();
+  applyRoll();
 }
 
 void Camera::setPosition(const glm::vec3 &position) { m_position = position; }
@@ -58,7 +61,19 @@ glm::vec3 Camera::getRight() const { return m_right; }
 float Camera::getFov() const { return m_fov; }
 void Camera::setFov(float fov) { m_fov = fov; }
 
-void Camera::setRoll(float newRoll) { m_roll = newRoll; }
+void Camera::setRoll(float newRoll, float negativeCl, float positiveCl) {
+  m_roll = glm::clamp(newRoll, negativeCl, positiveCl);
+}
+
+void Camera::applyRoll() {
+  if (m_roll != 0.0f) {
+    glm::mat4 rollMatrix =
+        glm::rotate(glm::mat4(1.0f), glm::radians(m_roll), m_front);
+    m_right = glm::vec3(rollMatrix * glm::vec4(m_right, 0.0f));
+    m_up = glm::vec3(rollMatrix * glm::vec4(m_up, 0.0f));
+  }
+}
+
 void Camera::updateVectors() {
   glm::vec3 front;
   front.x = cos(glm::radians(m_yaw)) * cos(glm::radians(m_pitch));
@@ -67,12 +82,6 @@ void Camera::updateVectors() {
   m_front = glm::normalize(front);
   m_right = glm::normalize(glm::cross(m_front, glm::vec3(0.0f, 1.0f, 0.0f)));
   m_up = glm::normalize(glm::cross(m_right, m_front));
-  if (m_roll != 0.0f) {
-    glm::mat4 rollMatrix =
-        glm::rotate(glm::mat4(1.0f), glm::radians(m_roll), m_front);
-    m_right = glm::vec3(rollMatrix * glm::vec4(m_right, 0.0f));
-    m_up = glm::vec3(rollMatrix * glm::vec4(m_up, 0.0f));
-  }
 }
 
 } // namespace Engine

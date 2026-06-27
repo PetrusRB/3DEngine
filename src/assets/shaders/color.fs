@@ -47,6 +47,7 @@ uniform int numSpotLights;
 uniform vec3 fogColor;
 uniform float fogStart;
 uniform float fogEnd;
+uniform float reflectStrength;
 uniform DirLight dirLights[MAX_DIR_LIGHTS];
 uniform PointLight pointLights[MAX_POINT_LIGHTS];
 uniform SpotLight spotLights[MAX_SPOT_LIGHTS];
@@ -61,7 +62,7 @@ vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 texColor) {
     float diff = max(dot(normal, lightDir), 0.0);
     vec3 halfwayDir = normalize(lightDir + viewDir);
     float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-    return light.ambient * texColor + light.diffuse * diff * texColor + light.specular * spec;
+    return light.ambient * texColor + (light.diffuse * diff + light.specular * spec * reflectStrength) * texColor;
 }
 
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 texColor) {
@@ -73,7 +74,7 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, v
     float attenuation = 1.0 / (light.constant + light.linear * dist + light.quadratic * dist * dist);
     vec3 ambient = light.ambient * texColor * attenuation;
     vec3 diffuse = light.diffuse * diff * texColor * attenuation;
-    vec3 specular = light.specular * spec * attenuation;
+    vec3 specular = light.specular * spec * reflectStrength * attenuation;
     return ambient + diffuse + specular;
 }
 
@@ -89,7 +90,7 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec
     float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
     vec3 ambient = light.ambient * texColor * attenuation;
     vec3 diffuse = light.diffuse * diff * texColor * attenuation * intensity;
-    vec3 specular = light.specular * spec * attenuation * intensity;
+    vec3 specular = light.specular * spec * reflectStrength * attenuation * intensity;
     return ambient + diffuse + specular;
 }
 

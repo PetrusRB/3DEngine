@@ -23,8 +23,11 @@ public:
 
   void processKeyboard(CameraMovement direction, float deltaTime);
   void processMouse(float xoffset, float yoffset);
+  void refreshVectors();
 
-  void setRoll(float newRoll);
+  void setRoll(float newRoll, float negativeCl = -10.0f,
+               float positiveCl = 10.0f);
+  void applyRoll();
   void setPosition(const glm::vec3 &position);
 
   glm::vec3 getPosition() const;

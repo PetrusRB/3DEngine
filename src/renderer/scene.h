@@ -31,6 +31,7 @@ struct SceneObject {
   Tag tag;
   glm::vec2 uvTiling{1.0f, 1.0f};
   glm::vec2 uvOffset{0.0f, 0.0f};
+  float reflectStrength = 1.0f;
 
   SceneObject() = default;
   SceneObject(ObjectID id, Mesh *mesh, Texture *texture = nullptr,
@@ -50,13 +51,15 @@ public:
                      const glm::vec3 &position = glm::vec3(0.0f),
                      const glm::vec3 &scale = glm::vec3(1.0f),
                      const glm::vec3 &rotation = glm::vec3(0.0f),
-                     const glm::vec2 &uvTiling = glm::vec3(1.0f));
+                     const glm::vec2 &uvTiling = glm::vec3(1.0f),
+                     const float &reflect = 1.0f);
 
   ObjectID addModel(const std::string &filename, const std::string &name = "",
                     Texture *texture = nullptr, const Tag &tag = "",
                     const glm::vec3 &position = glm::vec3(0.0f),
                     const glm::vec3 &scale = glm::vec3(1.0f),
-                    const glm::vec3 &rotation = glm::vec3(0.0f));
+                    const glm::vec3 &rotation = glm::vec3(0.0f),
+                    const float &reflect = 1.0f);
 
   SceneObject *getObject(ObjectID id);
   bool removeObject(ObjectID id);

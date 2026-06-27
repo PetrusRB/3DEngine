@@ -141,6 +141,8 @@ void UI::renderMain() {
             ImGui::DragFloat3("Rotation", &obj.transform.m_rotation.x, 1.0f);
             ImGui::DragFloat3("Scale", &obj.transform.m_scale.x, 0.1f, 0.01f,
                               100.0f);
+            ImGui::SliderFloat("Reflect", &obj.reflectStrength, 0.0f, 1.0f,
+                               "%.2f");
             if (obj.texture || obj.model) {
               if (ImGui::TreeNode("UV")) {
                 ImGui::DragFloat2("Tiling", &obj.uvTiling.x, 0.01f, 0.01f,

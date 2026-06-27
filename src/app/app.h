@@ -1,12 +1,12 @@
 #pragma once
 #include "../utils/arena_wrapper.h"
+#include "window.h"
+#include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
 #include <vector>
-
-struct GLFWwindow;
 
 namespace Engine {
 
@@ -28,12 +28,6 @@ class Light;
 class DirectionalLight;
 class MenuPause;
 
-struct WindowConfig {
-  int width = 800;
-  int height = 600;
-  std::string title = "Engine";
-};
-
 class Application {
 public:
   explicit Application(WindowConfig config = {});
@@ -49,12 +43,11 @@ private:
   void destroy();
   void recreate_coins();
 
-  GLFWwindow *m_window = nullptr;
   WindowConfig m_config;
+  std::unique_ptr<Window> m_window;
 
   std::vector<std::unique_ptr<Texture>> m_textures;
   std::unique_ptr<Cubemap> m_cubemap;
-
   std::unique_ptr<Camera> m_camera;
   std::unique_ptr<InputManager> m_input;
   std::unique_ptr<EventSystem> m_event;
@@ -71,6 +64,12 @@ private:
 
   std::vector<std::unique_ptr<Light>> m_lights;
   std::string maze_prefix = "maze";
+
+  std::array<glm::vec3, 5> coinPositions = {
+      glm::vec3(5.0f, 0.5f, 5.0f),  glm::vec3(10.0f, 0.5f, 3.0f),
+      glm::vec3(3.0f, 0.5f, 10.0f), glm::vec3(7.0f, 0.5f, 7.0f),
+      glm::vec3(1.0f, 0.5f, 1.0f),
+  };
 
   float m_shininess = 32.0f;
   bool m_cursorEnabled = false;

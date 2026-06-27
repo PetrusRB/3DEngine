@@ -32,6 +32,7 @@ void Player::update(float deltaTime) {
   if (mouseDelta.x != 0.0 || mouseDelta.y != 0.0)
     m_camera.processMouse(static_cast<float>(mouseDelta.x),
                           static_cast<float>(mouseDelta.y));
+  m_camera.refreshVectors();
 
   glm::vec3 front = m_camera.getFront();
   glm::vec3 right = m_camera.getRight();
