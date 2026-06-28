@@ -1,10 +1,5 @@
-build
 build/
-./build
 AGENTS.md
-./AGENTS.md
-
-.mimocode
-.mimocode/plans
-./mimocode/plans
-/.mimocode
+.mimocode/
+compile_commands.json
+imgui.ini
