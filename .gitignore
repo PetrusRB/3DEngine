@@ -3,3 +3,8 @@ build/
 ./build
 AGENTS.md
 ./AGENTS.md
+
+.mimocode
+.mimocode/plans
+./mimocode/plans
+/.mimocode
