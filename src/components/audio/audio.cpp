@@ -1,11 +1,13 @@
 #include "audio.h"
 #include "dr_libs/dr_mp3.h"
 #include "dr_libs/dr_wav.h"
+
 #define STB_VORBIS_HEADER_ONLY
 #include "stb/stb_vorbis.c"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <imgui/imgui.h>
 #include <vector>
 
 namespace Engine {
@@ -13,6 +15,7 @@ namespace Engine {
 ALCdevice *AudioSystem::s_device = nullptr;
 ALCcontext *AudioSystem::s_context = nullptr;
 bool AudioSystem::s_initialized = false;
+std::vector<Audio *> Audio::s_active;
 
 bool AudioSystem::init() {
   s_device = alcOpenDevice(nullptr);
@@ -265,6 +268,9 @@ void Audio::play() {
 
   alSourcePlay(m_source);
   m_playing = true;
+
+  if (std::find(s_active.begin(), s_active.end(), this) == s_active.end())
+    s_active.push_back(this);
 }
 
 void Audio::pause() {
@@ -285,11 +291,13 @@ void Audio::stop() {
 void Audio::setLoop(bool loop) { m_loop = loop; }
 
 void Audio::setGain(float gain) {
+  m_gain = gain;
   if (m_source)
     alSourcef(m_source, AL_GAIN, gain);
 }
 
 void Audio::setPitch(float pitch) {
+  m_pitch = pitch;
   if (m_source)
     alSourcef(m_source, AL_PITCH, pitch);
 }
@@ -363,8 +371,53 @@ bool Audio::isPlaying() const {
   return state == AL_PLAYING;
 }
 
+void Audio::renderUI() {
+  if (!isLoaded()) {
+    ImGui::TextDisabled("No audio loaded");
+    return;
+  }
+
+  ImGui::Checkbox("Loop", &m_loop);
+  setLoop(m_loop);
+
+  if (ImGui::SliderFloat("Gain", &m_gain, 0.0f, 1.0f, "%.2f"))
+    setGain(m_gain);
+
+  if (ImGui::SliderFloat("Pitch", &m_pitch, 0.1f, 3.0f, "%.2f"))
+    setPitch(m_pitch);
+
+  const char *typeNames[] = {"Self (3D)", "Global"};
+  int typeIdx = static_cast<int>(m_type);
+  if (ImGui::Combo("Type", &typeIdx, typeNames, 2)) {
+    setType(static_cast<AudioType>(typeIdx));
+  }
+
+  if (m_type == AudioType::Self) {
+    float refDist = 1.0f;
+    float maxDist = 50.0f;
+    float rolloff = 1.0f;
+    if (m_source) {
+      alGetSourcef(m_source, AL_REFERENCE_DISTANCE, &refDist);
+      alGetSourcef(m_source, AL_MAX_DISTANCE, &maxDist);
+      alGetSourcef(m_source, AL_ROLLOFF_FACTOR, &rolloff);
+    }
+    if (ImGui::SliderFloat("Ref Distance", &refDist, 0.1f, 20.0f))
+      setReferenceDistance(refDist);
+    if (ImGui::SliderFloat("Max Distance", &maxDist, 1.0f, 200.0f))
+      setMaxDistance(maxDist);
+    if (ImGui::SliderFloat("Rolloff", &rolloff, 0.0f, 5.0f))
+      setRolloffFactor(rolloff);
+  }
+  if (ImGui::Button("Stop")) {
+    stop();
+  }
+}
+
 void Audio::destroy() {
   stop();
+  auto it = std::find(s_active.begin(), s_active.end(), this);
+  if (it != s_active.end())
+    s_active.erase(it);
   if (m_source) {
     alDeleteSources(1, &m_source);
     m_source = 0;

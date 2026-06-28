@@ -5,7 +5,9 @@
 #define GLFW_INCLUDE_NONE
 #include "../algorithm/maze.h"
 #include "../camera/camera.h"
+#include "../components/collision/collision.h"
 #include "../cubemap/cubemap.h"
+#include "../debug/debug_draw.h"
 #include "../economy/economy.h"
 #include "../events/event_sys.h"
 #include "../light/light.h"
@@ -16,10 +18,12 @@
 #include "../renderer/mesh.h"
 #include "../renderer/model.h"
 #include "../renderer/scene.h"
+#include "../renderer/shadow.h"
 #include "../shader/shader.h"
 #include "../texture/texture.h"
 #include "../ui/menu_pause.h"
 #include "../ui/ui.h"
+#include "../ui/ui_comps/health_bar.h"
 #include "../utils/input.h"
 #include "../utils/utils.h"
 #include <GLFW/glfw3.h>
@@ -66,11 +70,24 @@ void Application::init() {
                                              "src/assets/shaders/color.fs");
   m_skyboxShader = std::make_unique<ShaderProgram>(
       "src/assets/shaders/cubemap.vs", "src/assets/shaders/cubemap.fs");
+  m_proceduralSkyShader = std::make_unique<ShaderProgram>(
+      "src/assets/shaders/cubemap.vs", "src/assets/shaders/procedural_sky.fs");
+
+  m_depthShader =
+      std::make_unique<ShaderProgram>("src/assets/shaders/shadow_depth.vs",
+                                      "src/assets/shaders/shadow_depth.fs");
+
+  m_shadowMap = std::make_unique<ShadowMap>();
+  m_shadowMap->init(2048);
 
   m_ui->setShininess(&m_shininess);
   m_ui->setLights(&m_lights);
+  m_ui->setZenith(&ps_zenith);
+  m_ui->setHorizon(&ps_horizon);
+  m_ui->setGround(&ps_ground);
   m_ui->setFrustumDebug(&m_frustumEnabled, &m_frustumMargin, &m_visibleObjects,
                         &m_culledObjects);
+  m_ui->setProceduralSky(&m_useProceduralSky);
 
   m_ui->setMazeWidth(&m_mazeWidth);
   m_ui->setMazeHeight(&m_mazeHeight);
@@ -88,6 +105,12 @@ void Application::init() {
   m_scene = std::make_unique<SceneManager>();
   m_player->setScene(m_scene.get());
   m_ui->setSceneObjects(&m_scene->objects());
+
+  m_debugDraw = std::make_unique<DebugDraw>();
+  m_debugDraw->init();
+  m_ui->setCollisionDebug(&m_collisionDebug);
+
+  auto &hpBar = m_ui->addUIComponent<HealthBar>(m_player.get());
 
   auto sun = std::make_unique<DirectionalLight>();
   sun->name = "Sun";
@@ -158,6 +181,8 @@ void Application::init() {
   m_cubeMesh = std::make_unique<Mesh>(cubeVertices);
   m_economy = std::make_unique<Economy>();
 
+  // registra as texturas na lista
+  // cria objetos do tipo textura
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/liminal/backroom-wall.png"));
   m_textures.push_back(
@@ -168,11 +193,10 @@ void Application::init() {
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/building_template/gray_grid.png"));
 
-  buildMaze();
-
   Texture *lava = m_textures[2].get();
   Texture *gray = m_textures[3].get();
 
+  buildMaze();
   recreate_coins();
 
   ObjectID m_lava =
@@ -188,32 +212,40 @@ void Application::init() {
 
   SceneObject *teapot = m_scene->getObject(teapotId);
   if (teapot) {
-    teapot->audio.load("src/assets/audio/teapot.mp3");
-    teapot->audio.setType(AudioType::Self);
-    teapot->audio.setLoop(true);
-    teapot->audio.setMaxDistance(50.0f);
-    teapot->audio.setReferenceDistance(1.0f);
-    teapot->audio.setGain(0.5f);
-    teapot->audio.play();
+    auto &audio = teapot->addComponent<Audio>();
+    audio.load("src/assets/audio/teapot.mp3");
+    audio.setType(AudioType::Self);
+    audio.setLoop(true);
+    audio.setMaxDistance(50.0f);
+    audio.setReferenceDistance(1.0f);
+    audio.setGain(0.5f);
+    audio.play();
   }
 
   // global
   SceneObject *ambient = m_scene->getObject(ambientId);
-  // if (ambient) {
-  //   ambient->audio.load("src/assets/audio/ambient.mp3");
-  //   ambient->audio.setType(AudioType::Global);
-  //   ambient->audio.setLoop(true);
-  //   ambient->audio.setGain(0.3f);
-  //   ambient->audio.play();
-  // }
+  if (ambient) {
+    auto &audio = ambient->addComponent<Audio>();
+    audio.load("src/assets/audio/ambient.mp3");
+    audio.setType(AudioType::Global);
+    audio.setLoop(true);
+    audio.setGain(0.1f);
+    audio.play();
+  }
 
   // quando tocar na lava
   m_event->onCollision(m_lava, [this](Player &player, SceneObject &obj) {
+    float now = static_cast<float>(glfwGetTime());
+    if (now - m_lastLavaKill < m_coolKill) {
+      return;
+    }
+    m_lastLavaKill = static_cast<float>(glfwGetTime());
     glm::vec3 curr_pos = player.transform.getPosition();
     std::string randomJk = m_utils->getRandomJoke();
     m_output->addLog(randomJk, static_cast<float>(glfwGetTime()));
-    player.setTeleportPending(
-        glm::vec3(curr_pos.x, curr_pos.y + 15.0f, curr_pos.z));
+    player.take_damage(15);
+    // player.setTeleportPending(
+    //     glm::vec3(curr_pos.x, curr_pos.y + 15.0f, curr_pos.z));
   });
   m_input->disableCursor();
 }
@@ -222,16 +254,23 @@ void Application::recreate_coins() {
   for (auto &pos : coinPositions) {
     ObjectID coin = m_scene->addObject(m_cubeMesh.get(), nullptr, "Coin",
                                        "coin", pos, glm::vec3(0.5f));
+    SceneObject *obj = m_scene->getObject(coin);
+    if (obj) {
+      auto &audio = obj->addComponent<Audio>();
+      audio.load("src/assets/audio/drop-coin.mp3");
+      audio.setType(AudioType::Global);
+      audio.setLoop(false);
+      audio.setGain(0.5f);
+    }
     m_coins.push_back(coin);
     m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
+      if (auto *audio = obj.getComponent<Audio>())
+        audio->play();
+      obj.active = false;
       m_economy->addMoney(&player, 50);
       m_output->addLog(fmt::format("Pegou a moeda {}, o jogador ganhou {}",
                                    obj.id, player.getMoney()),
                        static_cast<float>(glfwGetTime()));
-      m_scene->removeObject(obj.id);
-      m_event->remove(obj.id);
-      m_coins.erase(std::remove(m_coins.begin(), m_coins.end(), obj.id),
-                    m_coins.end());
     });
   }
 }
@@ -318,6 +357,27 @@ void Application::run() {
   SpatialGrid spatialGrid(m_cellSize * 2.0f);
 
   while (!m_window->shouldClose()) {
+    GLFWwindow *win = m_window->getNativeWindow();
+
+    bool hasFocus = glfwGetWindowAttrib(win, GLFW_FOCUSED) &&
+                    !glfwGetWindowAttrib(win, GLFW_ICONIFIED);
+
+    if (hasFocus != !m_wasAFK) {
+      bool isPaused = !hasFocus;
+      m_wasAFK = isPaused;
+      for (auto *a : Audio::activeSources())
+        if (isPaused)
+          a->pause();
+        else
+          a->play();
+    }
+
+    if (!hasFocus) {
+      glfwWaitEventsTimeout(0.01);
+      lastFrame = static_cast<float>(glfwGetTime());
+      continue;
+    }
+
     arena_wrap_reset(m_frameArena);
 
     float currentFrame = static_cast<float>(glfwGetTime());
@@ -362,17 +422,36 @@ void Application::run() {
 
     m_ui->setMoney(static_cast<int>(m_player->getMoney()));
 
-    for (ObjectID coinId : m_coins) {
-      SceneObject *coin = m_scene->getObject(coinId);
-      if (coin && coin->active)
-        coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
+    for (auto it = Audio::activeSources().begin();
+         it != Audio::activeSources().end();) {
+      Audio *audio = *it;
+      audio->update();
+      if (!audio->isPlaying()) {
+        it = Audio::activeSources().erase(it);
+        continue;
+      }
+      ++it;
     }
 
-    for (auto &[id, obj] : m_scene->objects()) {
-      if (obj.active && obj.audio.isLoaded()) {
-        obj.audio.updatePosition(obj.transform.getPosition());
-        obj.audio.update();
+    for (auto it = m_coins.begin(); it != m_coins.end();) {
+      SceneObject *coin = m_scene->getObject(*it);
+      if (!coin) {
+        it = m_coins.erase(it);
+        continue;
       }
+      if (coin->active) {
+        coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
+        ++it;
+        continue;
+      }
+      auto *audio = coin->getComponent<Audio>();
+      if (audio && !audio->isPlaying()) {
+        m_event->remove(*it);
+        m_scene->removeObject(*it);
+        it = m_coins.erase(it);
+        continue;
+      }
+      ++it;
     }
 
     int width, height;
@@ -385,16 +464,56 @@ void Application::run() {
     glDepthFunc(GL_LEQUAL);
     glDisable(GL_CULL_FACE);
     glDepthMask(GL_FALSE);
-    m_skyboxShader->use();
-    m_skyboxShader->setMat4("view", m_camera->getViewMatrix());
-    m_skyboxShader->setMat4("projection",
-                            m_camera->getProjectionMatrix(aspect));
-    m_skyboxShader->setInt("skybox", 0);
-    m_cubemap->render();
+
+    if (m_useProceduralSky) {
+      m_proceduralSkyShader->use();
+      m_proceduralSkyShader->setMat4("view", m_camera->getViewMatrix());
+      m_proceduralSkyShader->setMat4("projection",
+                                     m_camera->getProjectionMatrix(aspect));
+      for (auto &light : m_lights) {
+        if (light->enabled && light->type == Light::DIRECTIONAL) {
+          m_proceduralSkyShader->setVec3(
+              "sunDir",
+              static_cast<DirectionalLight *>(light.get())->direction);
+          break;
+        }
+      }
+      m_proceduralSkyShader->setFloat("time", currentFrame);
+      m_proceduralSkyShader->setVec3("fogColor",
+                                     m_menuPause->settings().fogColor);
+      m_proceduralSkyShader->setVec3("zenith", ps_zenith);
+      m_proceduralSkyShader->setVec3("horizon", ps_horizon);
+      m_proceduralSkyShader->setVec3("ground", ps_ground);
+
+      m_cubemap->render();
+    } else {
+      m_skyboxShader->use();
+      m_skyboxShader->setMat4("view", m_camera->getViewMatrix());
+      m_skyboxShader->setMat4("projection",
+                              m_camera->getProjectionMatrix(aspect));
+      m_skyboxShader->setInt("skybox", 0);
+      m_cubemap->render();
+    }
+
     glDepthMask(GL_TRUE);
     glDepthFunc(GL_LESS);
 
     glEnable(GL_CULL_FACE);
+
+    // Shadow pass
+    glm::vec3 lightDir(0.0f);
+    for (auto &light : m_lights) {
+      if (light->enabled && light->type == Light::DIRECTIONAL) {
+        lightDir = static_cast<DirectionalLight *>(light.get())->direction;
+        break;
+      }
+    }
+    m_shadowMap->begin(*m_depthShader, lightDir);
+    m_scene->render(*m_depthShader, nullptr, 0.0f, glm::vec3(0.0f),
+                    m_frameArena);
+    m_shadowMap->end();
+
+    glViewport(0, 0, width, height);
 
     // Frustum
     glm::mat4 vp =
@@ -502,9 +621,40 @@ void Application::run() {
     m_shader->setFloat("fogEnd", m_menuPause->settings().fogEnd);
     m_shader->setVec3("fogColor", m_menuPause->settings().fogColor);
 
+    m_shader->setMat4("lightSpaceMatrix", m_shadowMap->getLightSpaceMatrix());
+    m_shadowMap->bind(1);
+    m_shader->setInt("shadowMap", 1);
+    m_shader->setFloat("shadowBias", 0.005f);
+
     m_scene->render(*m_shader, m_frustumEnabled ? &frustum : nullptr,
                     m_menuPause->settings().fogEnd + 20.0f,
                     m_camera->getPosition(), m_frameArena);
+
+    // Debug collision shapes
+    if (m_collisionDebug) {
+      glDisable(GL_DEPTH_TEST);
+      m_debugDraw->begin();
+
+      for (auto &[id, obj] : m_scene->objects()) {
+        if (!obj.active)
+          continue;
+        if (auto *col = obj.getComponent<Collision>()) {
+          glm::vec3 c = col->isTrigger() ? glm::vec3(1.0f, 0.0f, 1.0f)
+                                         : glm::vec3(0.0f, 1.0f, 0.0f);
+          m_debugDraw->drawCollision(*col, obj.transform, c);
+        }
+      }
+
+      m_debugDraw->drawSphere(m_player->transform.getPosition() +
+                                  m_player->getCollider().getPosition(),
+                              m_player->getPlayerRadius(), glm::vec3(1.0f));
+
+      glm::mat4 vp =
+          m_camera->getProjectionMatrix(aspect) * m_camera->getViewMatrix();
+      m_debugDraw->end(m_camera->getViewMatrix(),
+                       m_camera->getProjectionMatrix(aspect));
+      glEnable(GL_DEPTH_TEST);
+    }
 
     // Rebuild spatial grid
     spatialGrid.clear();
@@ -530,7 +680,11 @@ void Application::destroy() {
   m_cubeMesh.reset();
   m_textures.clear();
   m_skyboxShader.reset();
+  m_proceduralSkyShader.reset();
   m_shader.reset();
+  m_depthShader.reset();
+  m_shadowMap.reset();
+  m_debugDraw.reset();
   m_player.reset();
   m_utils.reset();
   m_economy.reset();

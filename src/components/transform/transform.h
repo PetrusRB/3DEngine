@@ -1,10 +1,11 @@
 #pragma once
+#include "../component.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace Engine {
 
-class Transform {
+class Transform : public Component {
 public:
   Transform() = default;
   Transform(const glm::vec3 &pos, const glm::vec3 &rot = glm::vec3(0.0f),
@@ -21,14 +22,18 @@ public:
   const glm::vec3 &getRotation() const { return m_rotation; }
   const glm::vec3 &getScale() const { return m_scale; }
 
-  const glm::mat4 &getModelMatrix();
+  const glm::mat4 &getModelMatrix() const;
+
+  void renderUI() override;
+  const char *name() const override { return "Transform"; }
 
   glm::vec3 m_position{0.0f};
   glm::vec3 m_rotation{0.0f};
   glm::vec3 m_scale{1.0f};
 
 private:
-  glm::mat4 m_modelMatrix{1.0f};
+  mutable glm::mat4 m_modelMatrix{1.0f};
+  mutable bool m_dirty{true};
 };
 
 } // namespace Engine

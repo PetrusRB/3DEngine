@@ -1,8 +1,10 @@
 #pragma once
 #include "../camera/camera.h"
+#include "../components/collision/coltypes/sphere_collider.h"
 #include "../entity/entity.h"
 #include "../events/event_sys.h"
 #include "../utils/input.h"
+#include <vector>
 
 namespace Engine {
 
@@ -25,6 +27,8 @@ public:
   bool isFlying() const { return m_flying; }
   bool isOnGround() const { return m_onGround; }
   const glm::vec3 &getVelocity() const { return m_velocity; }
+  const SphereCollider &getCollider() const { return m_collider; }
+  float getPlayerRadius() const { return m_collider.getRadius(); }
 
 private:
   Camera &m_camera;
@@ -38,8 +42,7 @@ private:
   bool m_onGround = false;
 
   float m_eyeHeight = 1.7f;
-  float m_playerHeight = 1.8f;
-  float m_playerRadius = 0.3f;
+  SphereCollider m_collider;
   float m_gravity = -15.0f;
   float m_jumpForce = 7.0f;
   float m_walkSpeed = 5.0f;
@@ -78,13 +81,14 @@ private:
 
   float speed = m_walkSpeed;
 
+  std::vector<uint32_t> m_nearby;
+
   SceneManager *m_scene = nullptr;
   const SpatialGrid *m_spatialGrid = nullptr;
 
   glm::vec3 m_pendingTeleport{0.0f};
   bool m_hasPendingTeleport;
 
-  AABB getPlayerAABB(const glm::vec3 &pos) const;
   void resolveCollisionsAt(glm::vec3 &pos);
 };
 

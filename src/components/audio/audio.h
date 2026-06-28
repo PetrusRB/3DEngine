@@ -1,8 +1,10 @@
 #pragma once
+#include "../component.h"
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
 namespace Engine {
 
@@ -22,7 +24,7 @@ private:
   static bool s_initialized;
 };
 
-class Audio {
+class Audio : public Component {
 public:
   Audio() = default;
   ~Audio();
@@ -50,9 +52,16 @@ public:
   bool isPlaying() const;
   bool isLoaded() const { return m_source != 0; }
 
+  void renderUI() override;
+  const char *name() const override { return "Audio"; }
+
   void destroy();
 
+  static std::vector<Audio *> &activeSources() { return s_active; }
+
 private:
+  static std::vector<Audio *> s_active;
+
   static const int STREAM_BUFFERS = 4;
   static const int CHUNK_SAMPLES = 8192;
 
@@ -68,6 +77,8 @@ private:
   AudioType m_type = AudioType::Self;
   bool m_loop = false;
   bool m_playing = false;
+  float m_gain = 1.0f;
+  float m_pitch = 1.0f;
 
   DecoderType m_decoderType = DecoderType::None;
 

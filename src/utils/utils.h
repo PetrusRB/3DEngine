@@ -1,6 +1,9 @@
 #pragma once
 #include <random>
 #include <string>
+#if !defined(M_PI)
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace Engine {
 enum class Currency { USD };
@@ -12,11 +15,8 @@ public:
     size_t idx = dist(rng);
     return shittyJokes[idx];
   }
-  static std::string formatCoin(int cents, Currency curr) {
-    int inteiro = cents / 100;
-    int centavos = cents % 100;
-
-    std::string inteiroStr = std::to_string(inteiro);
+  static std::string formatCoin(int value, Currency curr) {
+    std::string inteiroStr = std::to_string(value);
     std::string result;
     int count = 0;
     for (int i = static_cast<int>(inteiroStr.size()) - 1; i >= 0; --i) {
@@ -29,14 +29,8 @@ public:
       }
     }
 
-    std::string centavosStr = std::to_string(centavos);
-    if (centavos < 10) {
-      centavosStr = "0" + centavosStr;
-    }
-
     const char *symbols[] = {"$"};
-    return std::string(symbols[static_cast<int>(curr)]) + result + "," +
-           centavosStr;
+    return std::string(symbols[static_cast<int>(curr)]) + result + ",00";
   }
 
 private:

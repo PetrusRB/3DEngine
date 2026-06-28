@@ -28,6 +28,9 @@ class Light;
 class DirectionalLight;
 class MenuPause;
 class AudioSystem;
+class ShadowMap;
+class DebugDraw;
+class Audio;
 
 class Application {
 public:
@@ -58,10 +61,14 @@ private:
   std::unique_ptr<Player> m_player;
   std::unique_ptr<ShaderProgram> m_shader;
   std::unique_ptr<ShaderProgram> m_skyboxShader;
+  std::unique_ptr<ShaderProgram> m_proceduralSkyShader;
   std::unique_ptr<SceneManager> m_scene;
   std::unique_ptr<Mesh> m_cubeMesh;
   std::unique_ptr<UI> m_ui;
   std::unique_ptr<MenuPause> m_menuPause;
+  std::unique_ptr<ShaderProgram> m_depthShader;
+  std::unique_ptr<ShadowMap> m_shadowMap;
+  std::unique_ptr<DebugDraw> m_debugDraw;
 
   std::vector<std::unique_ptr<Light>> m_lights;
   std::string maze_prefix = "maze";
@@ -71,6 +78,10 @@ private:
       glm::vec3(3.0f, 0.5f, 10.0f), glm::vec3(7.0f, 0.5f, 7.0f),
       glm::vec3(1.0f, 0.5f, 1.0f),
   };
+
+  glm::vec3 ps_zenith = glm::vec3(0.05, 0.1, 0.4);
+  glm::vec3 ps_horizon = glm::vec3(0.55, 0.65, 0.85);
+  glm::vec3 ps_ground = glm::vec3(0.25, 0.22, 0.2);
 
   float m_shininess = 32.0f;
   bool m_cursorEnabled = false;
@@ -85,6 +96,12 @@ private:
   float m_frustumMargin = 0.1f;
   int m_visibleObjects = 0;
   int m_culledObjects = 0;
+  bool m_useProceduralSky = false;
+  bool m_collisionDebug = false;
+  bool m_wasAFK = false;
+
+  float m_coolKill = 0.5f;
+  float m_lastLavaKill = 0.0f;
 
   void buildMaze();
 };

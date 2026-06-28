@@ -1,12 +1,14 @@
 #pragma once
-#include "../components/audio/audio.h"
+#include "../components/component.h"
 #include "../components/transform/transform.h"
 #include "../utils/arena_allocator.h"
 #include "model.h"
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <imgui/imgui.h>
 #include <memory>
 #include <string>
+#include <typeindex>
 #include <unordered_map>
 #include <vector>
 
@@ -26,9 +28,10 @@ struct SceneObject {
   Mesh *mesh = nullptr;
   Model *model = nullptr;
   Texture *texture = nullptr;
-  // Compoenentes
+
   Transform transform;
-  Audio audio;
+
+  std::vector<std::unique_ptr<Component>> components;
 
   bool active = true;
   std::string name;
@@ -44,6 +47,58 @@ struct SceneObject {
   SceneObject(ObjectID id, Model *model, Texture *texture = nullptr,
               const std::string &name = "", const Tag &tag = "")
       : id(id), model(model), texture(texture), name(name), tag(tag) {}
+
+  template <typename T, typename... Args> T &addComponent(Args &&...args) {
+    auto comp = std::make_unique<T>(std::forward<Args>(args)...);
+    T &ref = *comp;
+    components.push_back(std::move(comp));
+    return ref;
+  }
+
+  template <typename T> T *getComponent() {
+    for (auto &c : components) {
+      T *p = dynamic_cast<T *>(c.get());
+      if (p)
+        return p;
+    }
+    return nullptr;
+  }
+
+  template <typename T> const T *getComponent() const {
+    for (auto &c : components) {
+      const T *p = dynamic_cast<const T *>(c.get());
+      if (p)
+        return p;
+    }
+    return nullptr;
+  }
+
+  template <typename T> bool hasComponent() const {
+    for (auto &c : components) {
+      if (dynamic_cast<const T *>(c.get()))
+        return true;
+    }
+    return false;
+  }
+
+  void renderUI() {
+    ImGui::Checkbox("Active", &active);
+    transform.renderUI();
+    ImGui::SliderFloat("Reflect", &reflectStrength, 0.0f, 1.0f, "%.2f");
+    if (texture || model) {
+      if (ImGui::TreeNode("UV")) {
+        ImGui::DragFloat2("Tiling", &uvTiling.x, 0.01f, 0.01f, 100.0f);
+        ImGui::DragFloat2("Offset", &uvOffset.x, 0.01f);
+        ImGui::TreePop();
+      }
+    }
+    for (auto &comp : components) {
+      if (ImGui::TreeNode(comp->name())) {
+        comp->renderUI();
+        ImGui::TreePop();
+      }
+    }
+  }
 };
 
 class SceneManager {

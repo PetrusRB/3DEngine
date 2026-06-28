@@ -24,6 +24,14 @@ public:
   virtual ~Entity() = default;
 
   Transform transform;
+
+  float max_health = 100.0f;
+  float health = max_health;
+
+  void take_damage(float dmg) {
+    health = glm::max(health - dmg, 0.0f);
+  }
+  void heal(float val) { health = glm::min(health + val, max_health); }
 };
 
 } // namespace Engine

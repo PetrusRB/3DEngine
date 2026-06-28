@@ -1,4 +1,5 @@
 #include "player.h"
+#include "../components/collision/collision.h"
 #include "../physics/spatial_grid.h"
 #include "../renderer/scene.h"
 #include <cstdlib>
@@ -14,6 +15,10 @@ namespace Engine {
 Player::Player(Camera &camera, InputManager &input, EventSystem *event)
     : m_camera(camera), m_input(input), m_eventsys(event) {
   transform.setPosition(glm::vec3(0.0f, 5.0f, 0.0f));
+  max_health = 200.0f;
+  health = max_health;
+  m_collider.setRadius(0.3f);
+  m_collider.setPosition(glm::vec3(0.0f, 0.9f, 0.0f));
 }
 
 void Player::setTeleportPending(const glm::vec3 &targetPos) {
@@ -172,111 +177,72 @@ void Player::update(float deltaTime) {
   m_camera.setRoll(m_bobTilt + shakePitch);
 }
 
-AABB Player::getPlayerAABB(const glm::vec3 &pos) const {
-  return {pos + glm::vec3(-m_playerRadius, 0.0f, -m_playerRadius),
-          pos + glm::vec3(m_playerRadius, m_playerHeight, m_playerRadius)};
-}
-
 void Player::resolveCollisionsAt(glm::vec3 &pos) {
   if (!m_scene)
     return;
 
-  AABB playerBox = getPlayerAABB(pos);
+  float r = m_collider.getRadius();
+  glm::vec3 offset = m_collider.getPosition();
+  AABB playerBox{pos + offset - glm::vec3(r), pos + offset + glm::vec3(r)};
+
+  auto resolveOne = [&](SceneObject &obj) {
+    glm::vec3 oPos = obj.transform.getPosition();
+    glm::vec3 oScale = obj.transform.getScale();
+    AABB objBox{oPos - oScale * 0.5f, oPos + oScale * 0.5f};
+
+    if (!playerBox.overlaps(objBox))
+      return;
+
+    if (m_eventsys)
+      m_eventsys->emitCollision(obj.id, *this, obj);
+
+    glm::vec3 playerCenter = playerBox.getCenter();
+    glm::vec3 objCenter = objBox.getCenter();
+
+    float pushX = (playerCenter.x < objCenter.x)
+                      ? objBox.min.x - playerBox.max.x
+                      : objBox.max.x - playerBox.min.x;
+    float pushY = (playerCenter.y < objCenter.y)
+                      ? objBox.min.y - playerBox.max.y
+                      : objBox.max.y - playerBox.min.y;
+    float pushZ = (playerCenter.z < objCenter.z)
+                      ? objBox.min.z - playerBox.max.z
+                      : objBox.max.z - playerBox.min.z;
+
+    float absPushX = std::abs(pushX);
+    float absPushY = std::abs(pushY);
+    float absPushZ = std::abs(pushZ);
+
+    if (absPushX <= absPushY && absPushX <= absPushZ) {
+      pos.x += pushX;
+      m_velocity.x = 0.0f;
+    } else if (absPushY <= absPushX && absPushY <= absPushZ) {
+      pos.y += pushY;
+      m_velocity.y = 0.0f;
+      if (pushY > 0.0f)
+        m_onGround = true;
+    } else {
+      pos.z += pushZ;
+      m_velocity.z = 0.0f;
+    }
+
+    playerBox = {pos + offset - glm::vec3(r), pos + offset + glm::vec3(r)};
+  };
 
   if (m_spatialGrid) {
-    std::vector<uint32_t> nearby;
-    m_spatialGrid->query(playerBox, nearby);
+    m_spatialGrid->query(playerBox, m_nearby);
 
-    for (uint32_t id : nearby) {
+    for (uint32_t id : m_nearby) {
       SceneObject *obj = m_scene->getObject(id);
       if (!obj || !obj->active)
         continue;
-
-      glm::vec3 oPos = obj->transform.getPosition();
-      glm::vec3 oScale = obj->transform.getScale();
-      AABB objBox{oPos - oScale * 0.5f, oPos + oScale * 0.5f};
-
-      if (!playerBox.overlaps(objBox))
-        continue;
-
-      if (m_eventsys)
-        m_eventsys->emitCollision(obj->id, *this, *obj);
-
-      glm::vec3 playerCenter = playerBox.getCenter();
-      glm::vec3 objCenter = objBox.getCenter();
-
-      float pushX = (playerCenter.x < objCenter.x)
-                        ? objBox.min.x - playerBox.max.x
-                        : objBox.max.x - playerBox.min.x;
-      float pushY = (playerCenter.y < objCenter.y)
-                        ? objBox.min.y - playerBox.max.y
-                        : objBox.max.y - playerBox.min.y;
-      float pushZ = (playerCenter.z < objCenter.z)
-                        ? objBox.min.z - playerBox.max.z
-                        : objBox.max.z - playerBox.min.z;
-
-      float absPushX = std::abs(pushX);
-      float absPushY = std::abs(pushY);
-      float absPushZ = std::abs(pushZ);
-
-      if (absPushX <= absPushY && absPushX <= absPushZ) {
-        pos.x += pushX;
-        m_velocity.x = 0.0f;
-      } else if (absPushY <= absPushX && absPushY <= absPushZ) {
-        pos.y += pushY;
-        m_velocity.y = 0.0f;
-        if (pushY > 0.0f)
-          m_onGround = true;
-      } else {
-        pos.z += pushZ;
-        m_velocity.z = 0.0f;
-      }
-
-      playerBox = getPlayerAABB(pos);
+      resolveOne(*obj);
     }
   } else {
     for (auto &[id, obj] : m_scene->objects()) {
       if (!obj.active)
         continue;
-
-      glm::vec3 oPos = obj.transform.getPosition();
-      glm::vec3 oScale = obj.transform.getScale();
-      AABB objBox{oPos - oScale * 0.5f, oPos + oScale * 0.5f};
-
-      if (!playerBox.overlaps(objBox))
-        continue;
-
-      glm::vec3 playerCenter = playerBox.getCenter();
-      glm::vec3 objCenter = objBox.getCenter();
-
-      float pushX = (playerCenter.x < objCenter.x)
-                        ? objBox.min.x - playerBox.max.x
-                        : objBox.max.x - playerBox.min.x;
-      float pushY = (playerCenter.y < objCenter.y)
-                        ? objBox.min.y - playerBox.max.y
-                        : objBox.max.y - playerBox.min.y;
-      float pushZ = (playerCenter.z < objCenter.z)
-                        ? objBox.min.z - playerBox.max.z
-                        : objBox.max.z - playerBox.min.z;
-
-      float absPushX = std::abs(pushX);
-      float absPushY = std::abs(pushY);
-      float absPushZ = std::abs(pushZ);
-
-      if (absPushX <= absPushY && absPushX <= absPushZ) {
-        pos.x += pushX;
-        m_velocity.x = 0.0f;
-      } else if (absPushY <= absPushX && absPushY <= absPushZ) {
-        pos.y += pushY;
-        m_velocity.y = 0.0f;
-        if (pushY > 0.0f)
-          m_onGround = true;
-      } else {
-        pos.z += pushZ;
-        m_velocity.z = 0.0f;
-      }
-
-      playerBox = getPlayerAABB(pos);
+      resolveOne(obj);
     }
   }
 }
