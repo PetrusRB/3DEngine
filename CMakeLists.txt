@@ -37,4 +37,5 @@ target_link_libraries(3DEngine
     user32
     shell32
     assimp
+    openal
 )

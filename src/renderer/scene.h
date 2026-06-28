@@ -1,7 +1,8 @@
 #pragma once
+#include "../components/audio/audio.h"
+#include "../components/transform/transform.h"
 #include "../utils/arena_allocator.h"
 #include "model.h"
-#include "transform.h"
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
@@ -25,7 +26,10 @@ struct SceneObject {
   Mesh *mesh = nullptr;
   Model *model = nullptr;
   Texture *texture = nullptr;
+  // Compoenentes
   Transform transform;
+  Audio audio;
+
   bool active = true;
   std::string name;
   Tag tag;

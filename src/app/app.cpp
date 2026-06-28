@@ -1,4 +1,5 @@
 #include "app.h"
+#include "../components/audio/audio.h"
 #include "../utils/arena_wrapper.h"
 #include <glm/ext/vector_float3.hpp>
 #define GLFW_INCLUDE_NONE
@@ -45,6 +46,8 @@ void Application::init() {
 
   m_window = std::make_unique<Window>(m_config);
   GLFWwindow *native = m_window->getNativeWindow();
+
+  AudioSystem::init();
 
   m_output = std::make_unique<OutputTerm>();
   m_ui = std::make_unique<UI>();
@@ -175,9 +178,34 @@ void Application::init() {
   ObjectID m_lava =
       m_scene->addObject(m_cubeMesh.get(), lava, "Kill", "persistent",
                          glm::vec3(9.0f, 0.5f, 7.0f), glm::vec3(0.5f));
-  m_scene->addModel("src/assets/models/teapot/teapot.obj", "Teapot", gray,
-                    "persistent", glm::vec3(8.0f, 7.0f, 3.0f),
-                    glm::vec3(0.05f, 0.05f, 0.05f));
+  ObjectID teapotId = m_scene->addModel(
+      "src/assets/models/teapot/teapot.obj", "Teapot", gray, "persistent",
+      glm::vec3(8.0f, 7.0f, 3.0f), glm::vec3(0.05f, 0.05f, 0.05f));
+
+  ObjectID ambientId =
+      m_scene->addObject(m_cubeMesh.get(), nullptr, "AmbientSound",
+                         "persistent", glm::vec3(0.0f), glm::vec3(0.0f));
+
+  SceneObject *teapot = m_scene->getObject(teapotId);
+  if (teapot) {
+    teapot->audio.load("src/assets/audio/teapot.mp3");
+    teapot->audio.setType(AudioType::Self);
+    teapot->audio.setLoop(true);
+    teapot->audio.setMaxDistance(50.0f);
+    teapot->audio.setReferenceDistance(1.0f);
+    teapot->audio.setGain(0.5f);
+    teapot->audio.play();
+  }
+
+  // global
+  SceneObject *ambient = m_scene->getObject(ambientId);
+  // if (ambient) {
+  //   ambient->audio.load("src/assets/audio/ambient.mp3");
+  //   ambient->audio.setType(AudioType::Global);
+  //   ambient->audio.setLoop(true);
+  //   ambient->audio.setGain(0.3f);
+  //   ambient->audio.play();
+  // }
 
   // quando tocar na lava
   m_event->onCollision(m_lava, [this](Player &player, SceneObject &obj) {
@@ -326,6 +354,9 @@ void Application::run() {
     if (!m_cursorEnabled && !m_menuPause->isPaused())
       m_player->update(deltaTime);
 
+    AudioSystem::updateListener(m_camera->getPosition(), m_camera->getFront(),
+                                glm::vec3(0.0f, 1.0f, 0.0f));
+
     m_ui->setUIPlayerState(m_player->isFlying(), m_player->isOnGround(),
                            m_player->transform.getPosition());
 
@@ -335,6 +366,13 @@ void Application::run() {
       SceneObject *coin = m_scene->getObject(coinId);
       if (coin && coin->active)
         coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
+    }
+
+    for (auto &[id, obj] : m_scene->objects()) {
+      if (obj.active && obj.audio.isLoaded()) {
+        obj.audio.updatePosition(obj.transform.getPosition());
+        obj.audio.update();
+      }
     }
 
     int width, height;
@@ -501,6 +539,8 @@ void Application::destroy() {
   m_cubemap.reset();
 
   arena_wrap_destroy(m_frameArena);
+
+  AudioSystem::shutdown();
 
   m_window.reset();
 }

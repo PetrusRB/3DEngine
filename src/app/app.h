@@ -27,6 +27,7 @@ class Texture;
 class Light;
 class DirectionalLight;
 class MenuPause;
+class AudioSystem;
 
 class Application {
 public:

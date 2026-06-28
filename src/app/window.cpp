@@ -7,7 +7,7 @@
 namespace Engine {
 
 static void framebufferSizeCallback(GLFWwindow * /*window*/, int width,
-                                     int height) {
+                                    int height) {
   glViewport(0, 0, width, height);
 }
 
@@ -20,8 +20,8 @@ Window::Window(const WindowConfig &config)
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  m_window = glfwCreateWindow(config.width, config.height,
-                              config.title.c_str(), nullptr, nullptr);
+  m_window = glfwCreateWindow(config.width, config.height, config.title.c_str(),
+                              nullptr, nullptr);
   if (!m_window) {
     glfwTerminate();
     throw std::runtime_error("Falha ao criar a janela");
@@ -45,9 +45,7 @@ void Window::update() {
   glfwPollEvents();
 }
 
-bool Window::shouldClose() const {
-  return glfwWindowShouldClose(m_window);
-}
+bool Window::shouldClose() const { return glfwWindowShouldClose(m_window); }
 
 Window::~Window() {
   if (m_window) {
