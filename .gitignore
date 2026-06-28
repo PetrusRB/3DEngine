@@ -1,5 +1,5 @@
 build/
-AGENTS.md
 .mimocode/
+AGENTS.md
 compile_commands.json
 imgui.ini
