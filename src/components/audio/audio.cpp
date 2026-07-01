@@ -342,6 +342,9 @@ void Audio::update() {
   if (!m_source || !m_playing)
     return;
 
+  if (m_position)
+    updatePosition(*m_position);
+
   ALint processed = 0;
   alGetSourcei(m_source, AL_BUFFERS_PROCESSED, &processed);
 

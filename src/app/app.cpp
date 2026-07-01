@@ -185,13 +185,18 @@ void Application::init() {
   // cria objetos do tipo textura
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/liminal/backroom-wall.png"));
+
   m_textures.push_back(
       std::make_unique<Texture>("src/assets/textures/liminal/carpet.png"));
 
   m_textures.push_back(
       std::make_unique<Texture>("src/assets/textures/nature/lava002.jpg"));
+
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/building_template/gray_grid.png"));
+
+  m_textures.push_back(std::make_unique<Texture>(
+      "src/assets/textures/liminal/celling.jpg")); // muito grande
 
   Texture *lava = m_textures[2].get();
   Texture *gray = m_textures[3].get();
@@ -219,6 +224,7 @@ void Application::init() {
     audio.setMaxDistance(50.0f);
     audio.setReferenceDistance(1.0f);
     audio.setGain(0.5f);
+    audio.bindTransform(&teapot->transform.getPosition());
     audio.play();
   }
 
@@ -261,6 +267,7 @@ void Application::recreate_coins() {
       audio.setType(AudioType::Global);
       audio.setLoop(false);
       audio.setGain(0.5f);
+      audio.bindTransform(&obj->transform.getPosition());
     }
     m_coins.push_back(coin);
     m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
@@ -285,6 +292,7 @@ void Application::buildMaze() {
 
   Texture *wallTex = m_textures[0].get();
   Texture *floorTex = m_textures[1].get();
+  Texture *ceelingTex = m_textures[4].get();
 
   uint32_t gridHeight = grid.size();   // quantidade de linhas
   uint32_t gridWidth = grid[0].size(); // quantidade de colunas
@@ -302,8 +310,9 @@ void Application::buildMaze() {
       glm::vec3(centerX, -m_floorThickness * 0.5f - 0.001f, centerZ),
       glm::vec3(totalWidth, m_floorThickness, totalDepth), glm::vec3(0.0f),
       glm::vec2(totalWidth / m_cellSize, totalWidth / m_cellSize), 0.0f);
+
   m_scene->addObject(
-      m_cubeMesh.get(), floorTex, "Roof", maze_prefix,
+      m_cubeMesh.get(), ceelingTex, "Roof", maze_prefix,
       glm::vec3(centerX, m_wallHeight + m_floorThickness * 0.5f - 0.001f,
                 centerZ),
       glm::vec3(totalWidth, m_floorThickness, totalDepth), glm::vec3(0.0f),

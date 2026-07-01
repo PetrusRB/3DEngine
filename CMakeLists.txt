@@ -38,4 +38,5 @@ target_link_libraries(3DEngine
     shell32
     assimp
     openal
+    dbghelp
 )

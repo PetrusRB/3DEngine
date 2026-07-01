@@ -57,6 +57,8 @@ public:
 
   void destroy();
 
+  void bindTransform(const glm::vec3 *pos) { m_position = pos; }
+
   static std::vector<Audio *> &activeSources() { return s_active; }
 
 private:
@@ -79,6 +81,8 @@ private:
   bool m_playing = false;
   float m_gain = 1.0f;
   float m_pitch = 1.0f;
+
+  const glm::vec3 *m_position = nullptr;
 
   DecoderType m_decoderType = DecoderType::None;
 
