@@ -16,8 +16,6 @@ set "GXX=C:/msys64/mingw64/bin/g++.exe"
 set "NINJA=ninja"
 
 :: Flags de otimizacao por build type
-:: Release: O3 + LTO + avx2 (se disponivel)
-:: Debug: O0 + debug info
 if /I "%BUILD_TYPE%"=="Release" (
     set "CXX_FLAGS=-O3 -DNDEBUG -flto -march=x86-64-v3"
     set "C_FLAGS=-O3 -DNDEBUG -flto -march=x86-64-v3"
@@ -26,7 +24,7 @@ if /I "%BUILD_TYPE%"=="Release" (
     set "C_FLAGS=-O0 -g3 -D_DEBUG"
 )
 
-:: Flag de execucao direta
+:: Flag para execução direta
 set "DIRECT_RUN=0"
 if /I "%~1"=="--direct" set "DIRECT_RUN=1"
 if /I "%~1"=="-d" set "DIRECT_RUN=1"

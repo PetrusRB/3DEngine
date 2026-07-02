@@ -247,7 +247,7 @@ void Application::init() {
     }
     now = static_cast<float>(glfwGetTime());
     m_lastHeal = now;
-    m_output->addLog(fmt::format(""), now);
+    m_output->addLog(fmt::format("Curou {} de vida", heal), now);
     player.heal(heal);
   });
 
@@ -457,20 +457,14 @@ void Application::run() {
 
     for (auto it = m_coins.begin(); it != m_coins.end();) {
       SceneObject *coin = *it;
-      if (!coin || !coin->active) {
-        if (coin) {
-          auto *audio = coin->getComponent<Audio>();
-          if (audio && !audio->isPlaying()) {
-            m_event->remove(coin->id);
-            m_scene->removeObject(coin->id);
-            it = m_coins.erase(it);
-            continue;
-          }
-        } else {
-          it = m_coins.erase(it);
-          continue;
-        }
-        ++it;
+      if (!coin) {
+        it = m_coins.erase(it);
+        continue;
+      }
+      if (!coin->active) {
+        m_event->remove(coin->id);
+        m_scene->removeObject(coin->id);
+        it = m_coins.erase(it);
         continue;
       }
       coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
