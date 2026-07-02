@@ -85,8 +85,8 @@ void Application::init() {
   m_ui->setZenith(&ps_zenith);
   m_ui->setHorizon(&ps_horizon);
   m_ui->setGround(&ps_ground);
-  m_ui->setFrustumDebug(&m_frustumEnabled, &m_frustumMargin, &m_visibleObjects,
-                        &m_culledObjects);
+  m_ui->setFrustumDebug(&m_frustumEnabled, &m_frustumMargin,
+                        &m_visibleObjectsUI, &m_culledObjectsUI);
   m_ui->setProceduralSky(&m_useProceduralSky);
 
   m_ui->setMazeWidth(&m_mazeWidth);
@@ -181,8 +181,6 @@ void Application::init() {
   m_cubeMesh = std::make_unique<Mesh>(cubeVertices);
   m_economy = std::make_unique<Economy>();
 
-  // registra as texturas na lista
-  // cria objetos do tipo textura
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/liminal/backroom-wall.png"));
 
@@ -195,8 +193,8 @@ void Application::init() {
   m_textures.push_back(std::make_unique<Texture>(
       "src/assets/textures/building_template/gray_grid.png"));
 
-  m_textures.push_back(std::make_unique<Texture>(
-      "src/assets/textures/liminal/celling.jpg")); // muito grande
+  m_textures.push_back(
+      std::make_unique<Texture>("src/assets/textures/liminal/celling.jpg"));
 
   Texture *lava = m_textures[2].get();
   Texture *gray = m_textures[3].get();
@@ -228,7 +226,6 @@ void Application::init() {
     audio.play();
   }
 
-  // global
   SceneObject *ambient = m_scene->getObject(ambientId);
   if (ambient) {
     auto &audio = ambient->addComponent<Audio>();
@@ -238,18 +235,33 @@ void Application::init() {
     audio.setGain(0.1f);
     audio.play();
   }
+  ObjectID m_healObj =
+      m_scene->addObject(m_cubeMesh.get(), lava, "Heal", "persistent",
+                         glm::vec3(10.0f, 0.5f, 9.0f), glm::vec3(0.5f));
 
-  // quando tocar na lava
+  m_event->onCollision(m_healObj, [this](Player &player, SceneObject &obj) {
+    float now = static_cast<float>(glfwGetTime());
+    float heal = 15;
+    if (now - m_lastHeal < m_coolHeal) {
+      return;
+    }
+    now = static_cast<float>(glfwGetTime());
+    m_lastHeal = now;
+    m_output->addLog(fmt::format(""), now);
+    player.heal(heal);
+  });
+
   m_event->onCollision(m_lava, [this](Player &player, SceneObject &obj) {
     float now = static_cast<float>(glfwGetTime());
+    float damage = 15;
     if (now - m_lastLavaKill < m_coolKill) {
       return;
     }
     m_lastLavaKill = static_cast<float>(glfwGetTime());
     glm::vec3 curr_pos = player.transform.getPosition();
-    std::string randomJk = m_utils->getRandomJoke();
-    m_output->addLog(randomJk, static_cast<float>(glfwGetTime()));
-    player.take_damage(15);
+    m_output->addLog(fmt::format("Levou {} de dano", damage),
+                     static_cast<float>(glfwGetTime()));
+    player.take_damage(damage);
     // player.setTeleportPending(
     //     glm::vec3(curr_pos.x, curr_pos.y + 15.0f, curr_pos.z));
   });
@@ -268,8 +280,8 @@ void Application::recreate_coins() {
       audio.setLoop(false);
       audio.setGain(0.5f);
       audio.bindTransform(&obj->transform.getPosition());
+      m_coins.push_back(obj);
     }
-    m_coins.push_back(coin);
     m_event->onCollision(coin, [this](Player &player, SceneObject &obj) {
       if (auto *audio = obj.getComponent<Audio>())
         audio->play();
@@ -363,6 +375,7 @@ void Application::buildMaze() {
 void Application::run() {
   float lastFrame = 0.0f;
   Frustum frustum;
+  Frustum shadowFrustum;
   SpatialGrid spatialGrid(m_cellSize * 2.0f);
 
   while (!m_window->shouldClose()) {
@@ -443,23 +456,24 @@ void Application::run() {
     }
 
     for (auto it = m_coins.begin(); it != m_coins.end();) {
-      SceneObject *coin = m_scene->getObject(*it);
-      if (!coin) {
-        it = m_coins.erase(it);
-        continue;
-      }
-      if (coin->active) {
-        coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
+      SceneObject *coin = *it;
+      if (!coin || !coin->active) {
+        if (coin) {
+          auto *audio = coin->getComponent<Audio>();
+          if (audio && !audio->isPlaying()) {
+            m_event->remove(coin->id);
+            m_scene->removeObject(coin->id);
+            it = m_coins.erase(it);
+            continue;
+          }
+        } else {
+          it = m_coins.erase(it);
+          continue;
+        }
         ++it;
         continue;
       }
-      auto *audio = coin->getComponent<Audio>();
-      if (audio && !audio->isPlaying()) {
-        m_event->remove(*it);
-        m_scene->removeObject(*it);
-        it = m_coins.erase(it);
-        continue;
-      }
+      coin->transform.rotate(glm::vec3(0.0f, 90.0f * deltaTime, 0.0f));
       ++it;
     }
 
@@ -509,7 +523,13 @@ void Application::run() {
 
     glEnable(GL_CULL_FACE);
 
-    // Shadow pass
+    // Frustum (computed once, used by shadow pass and main pass)
+    glm::mat4 vp =
+        m_camera->getProjectionMatrix(aspect) * m_camera->getViewMatrix();
+    frustum.update(vp, m_frustumMargin);
+    shadowFrustum.update(vp, m_shadowFrustumMargin);
+
+    // Shadow pass — uses wider frustum to avoid shadow popping
     glm::vec3 lightDir(0.0f);
     for (auto &light : m_lights) {
       if (light->enabled && light->type == Light::DIRECTIONAL) {
@@ -518,37 +538,14 @@ void Application::run() {
       }
     }
     m_shadowMap->begin(*m_depthShader, lightDir);
-    m_scene->render(*m_depthShader, nullptr, 0.0f, glm::vec3(0.0f),
+    m_scene->render(*m_depthShader, &shadowFrustum, 0.0f, glm::vec3(0.0f),
                     m_frameArena);
     m_shadowMap->end();
 
     glViewport(0, 0, width, height);
 
-    // Frustum
-    glm::mat4 vp =
-        m_camera->getProjectionMatrix(aspect) * m_camera->getViewMatrix();
-    frustum.update(vp, m_frustumMargin);
-
-    m_visibleObjects = 0;
-    m_culledObjects = 0;
-    if (m_frustumEnabled) {
-      for (auto &[id, obj] : m_scene->objects()) {
-        if (!obj.active)
-          continue;
-        glm::vec3 pos = obj.transform.getPosition();
-        glm::vec3 scale = obj.transform.getScale();
-        AABB box{pos - scale * 0.5f, pos + scale * 0.5f};
-        if (frustum.isAABBInside(box))
-          m_visibleObjects++;
-        else
-          m_culledObjects++;
-      }
-    } else {
-      for (auto &[id, obj] : m_scene->objects()) {
-        if (obj.active)
-          m_visibleObjects++;
-      }
-    }
+    m_visibleObjectsUI = m_scene->getVisibleObjects();
+    m_culledObjectsUI = m_scene->getCulledObjects();
 
     // Scene objects
     m_shader->use();

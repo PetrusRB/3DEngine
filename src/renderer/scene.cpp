@@ -126,9 +126,15 @@ void SceneManager::render(ShaderProgram &shader, const Frustum *frustum,
   ArenaAllocator<glm::mat4> matAlloc(frameArena);
   std::unordered_map<BatchKey, MatVec, BatchKeyHash> batches;
 
+  m_visibleObjects = 0;
+  m_culledObjects = 0;
+
   for (auto &[id, obj] : m_objects) {
-    if (!isVisible(obj))
+    if (!isVisible(obj)) {
+      m_culledObjects++;
       continue;
+    }
+    m_visibleObjects++;
     glm::mat4 modelMatrix = obj.transform.getModelMatrix();
     if (obj.model) {
       for (const auto &sub : obj.model->subMeshes()) {

@@ -135,11 +135,16 @@ public:
   std::vector<ObjectID> getIDsByTag(const Tag &tag);
   size_t objectCount() const;
 
+  int getVisibleObjects() const { return m_visibleObjects; }
+  int getCulledObjects() const { return m_culledObjects; }
+
 private:
   ObjectID nextID();
   std::unordered_map<ObjectID, SceneObject> m_objects;
   std::unordered_map<std::string, std::shared_ptr<Model>> m_modelCache;
   ObjectID m_nextID = 1;
+  int m_visibleObjects = 0;
+  int m_culledObjects = 0;
 };
 
 } // namespace Engine

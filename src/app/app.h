@@ -21,6 +21,7 @@ class Player;
 class EventSystem;
 class ShaderProgram;
 class SceneManager;
+struct SceneObject;
 class Mesh;
 class UI;
 class Texture;
@@ -90,18 +91,21 @@ private:
   float m_wallHeight = 4.0f;
   float m_floorThickness = 0.1f;
   float m_cellSize = 2.0f;
-  std::vector<ObjectID> m_coins;
+  std::vector<SceneObject *> m_coins;
   t_arena *m_frameArena = nullptr;
   bool m_frustumEnabled = true;
   float m_frustumMargin = 0.1f;
-  int m_visibleObjects = 0;
-  int m_culledObjects = 0;
+  float m_shadowFrustumMargin = 15.0f;
+  int m_visibleObjectsUI = 0;
+  int m_culledObjectsUI = 0;
   bool m_useProceduralSky = false;
   bool m_collisionDebug = false;
   bool m_wasAFK = false;
 
   float m_coolKill = 0.5f;
+  float m_coolHeal = 0.5f;
   float m_lastLavaKill = 0.0f;
+  float m_lastHeal = 0.0f;
 
   void buildMaze();
 };
